@@ -169,10 +169,10 @@
                 <div class="empty-inner">
                   <h3>Операций пока нет</h3>
                   <p>Добавьте первый доход или расход, чтобы начать контролировать свой бюджет.</p>
-                  <button type="button" class="primary-button" data-open-form>+ Добавить операцию</button>
                 </div>
               </div>
               <ul id="operationsList" class="operations-list" aria-live="polite"></ul>
+              <button type="button" class="primary-button operations-add-action" data-open-form>+ Добавить операцию</button>
             </aside>
           </div>
         </section>
@@ -356,6 +356,23 @@
           <span class="account-current-badge">Текущий</span>
         </div>
         <button type="button" id="addAccountBtn" class="primary-button">Добавить аккаунт</button>
+      </section>
+    </div>
+
+    <div id="deleteOperationDialog" class="account-switcher-dialog delete-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="deleteOperationHeading" aria-describedby="deleteOperationDescription" hidden>
+      <section class="panel delete-confirm-panel">
+        <div class="delete-confirm-icon" aria-hidden="true">!</div>
+        <p class="eyebrow">ПОДТВЕРЖДЕНИЕ</p>
+        <h2 id="deleteOperationHeading">Удалить операцию?</h2>
+        <p id="deleteOperationDescription">Операция будет удалена из списка.</p>
+        <div class="delete-operation-preview">
+          <strong id="deleteOperationCategory"></strong>
+          <span id="deleteOperationAmount"></span>
+        </div>
+        <div class="delete-confirm-actions">
+          <button id="cancelDeleteOperationBtn" class="secondary-button" type="button">Оставить</button>
+          <button id="confirmDeleteOperationBtn" class="danger-button" type="button">Удалить</button>
+        </div>
       </section>
     </div>
 

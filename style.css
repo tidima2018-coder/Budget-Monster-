@@ -274,6 +274,95 @@ h1 {
   display: none;
 }
 
+.delete-confirm-dialog {
+  z-index: 30;
+}
+
+.delete-confirm-panel {
+  width: min(420px, 100%);
+  padding: 28px;
+  text-align: center;
+  animation: dialog-enter 0.2s ease-out;
+}
+
+.delete-confirm-icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  place-items: center;
+  border: 1px solid rgba(242, 107, 107, 0.28);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(242, 107, 107, 0.2), rgba(242, 107, 107, 0.08));
+  color: var(--expense);
+  font-size: 1.8rem;
+  font-weight: 800;
+  box-shadow: 0 10px 26px rgba(242, 107, 107, 0.12);
+}
+
+.delete-confirm-panel .eyebrow {
+  margin-bottom: 8px;
+  color: var(--expense);
+}
+
+.delete-confirm-panel h2 {
+  margin: 0 0 9px;
+  font-size: 1.4rem;
+}
+
+.delete-confirm-panel > p:not(.eyebrow) {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.delete-operation-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 20px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: rgba(15, 23, 42, 0.68);
+  text-align: left;
+}
+
+.delete-operation-preview strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.delete-operation-preview span {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.delete-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.danger-button {
+  min-height: 46px;
+  padding: 0 18px;
+  border: 1px solid rgba(242, 107, 107, 0.32);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #e85e67, #c94255);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgba(201, 66, 85, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.danger-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 13px 26px rgba(201, 66, 85, 0.3);
+}
+
 .account-switcher-panel {
   width: min(440px, 100%);
   max-height: calc(100vh - 28px);
@@ -691,9 +780,12 @@ h1 {
 }
 
 .empty-inner p {
-  margin-bottom: 18px;
   color: var(--ink-soft);
   line-height: 1.6;
+}
+
+.operations-add-action {
+  margin-top: 16px;
 }
 
 .analytics-summary {

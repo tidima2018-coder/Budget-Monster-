@@ -42,6 +42,11 @@ const refs = {
   authError: document.getElementById("authError"),
   dialog: document.getElementById("operationDialog"),
   accountSwitcherDialog: document.getElementById("accountSwitcherDialog"),
+  deleteOperationDialog: document.getElementById("deleteOperationDialog"),
+  deleteOperationCategory: document.getElementById("deleteOperationCategory"),
+  deleteOperationAmount: document.getElementById("deleteOperationAmount"),
+  cancelDeleteOperationBtn: document.getElementById("cancelDeleteOperationBtn"),
+  confirmDeleteOperationBtn: document.getElementById("confirmDeleteOperationBtn"),
   switcherAccountName: document.getElementById("switcherAccountName"),
   switcherAccountPhone: document.getElementById("switcherAccountPhone"),
   closeAccountSwitcherBtn: document.getElementById("closeAccountSwitcherBtn"),
@@ -80,6 +85,8 @@ const refs = {
 };
 
 let operations = [];
+let operationPendingDelete = null;
+let deleteDialogTrigger = null;
 
 const state = {
   currentType: "income",
@@ -561,14 +568,12 @@ function renderOperations() {
     deleteButton.textContent = "Удалить";
     deleteButton.setAttribute("aria-label", `Удалить операцию ${operation.category}`);
     deleteButton.addEventListener("click", () => {
-      const confirmed = window.confirm("Удалить эту операцию?");
-      if (!confirmed) {
-        return;
-      }
-
-      operations = operations.filter((entry) => entry.id !== operation.id);
-      saveOperations();
-      renderApp();
+      operationPendingDelete = operation.id;
+      deleteDialogTrigger = deleteButton;
+      refs.deleteOperationCategory.textContent = operation.category;
+      refs.deleteOperationAmount.textContent = `${sign}${formatMoney(operation.amount)}`;
+      refs.deleteOperationDialog.hidden = false;
+      refs.cancelDeleteOperationBtn.focus();
     });
 
     item.append(info, amount, deleteButton);
@@ -579,6 +584,31 @@ function renderOperations() {
 function renderApp() {
   calculateTotals();
   renderOperations();
+}
+
+function closeDeleteOperationDialog(restoreFocus = true) {
+  refs.deleteOperationDialog.hidden = true;
+  operationPendingDelete = null;
+
+  if (restoreFocus && deleteDialogTrigger && deleteDialogTrigger.isConnected) {
+    deleteDialogTrigger.focus();
+  }
+  deleteDialogTrigger = null;
+}
+
+function confirmDeleteOperation() {
+  if (operationPendingDelete === null) {
+    return;
+  }
+
+  operations = operations.filter((entry) => entry.id !== operationPendingDelete);
+  saveOperations();
+  closeDeleteOperationDialog(false);
+  renderApp();
+  const addOperationButton = document.querySelector("[data-open-form]");
+  if (addOperationButton) {
+    addOperationButton.focus();
+  }
 }
 
 function showSection(sectionName) {
@@ -926,6 +956,19 @@ function bindAuthEvents() {
 }
 
 function bindEvents() {
+  refs.cancelDeleteOperationBtn.addEventListener("click", closeDeleteOperationDialog);
+  refs.confirmDeleteOperationBtn.addEventListener("click", confirmDeleteOperation);
+  refs.deleteOperationDialog.addEventListener("click", (event) => {
+    if (event.target === refs.deleteOperationDialog) {
+      closeDeleteOperationDialog();
+    }
+  });
+  refs.deleteOperationDialog.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeDeleteOperationDialog();
+    }
+  });
+
   refs.typeButtons.forEach((button) => {
     button.addEventListener("click", () => {
       updateType(button.dataset.type);
