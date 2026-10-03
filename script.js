@@ -1,5 +1,7 @@
 ﻿const STORAGE_KEY = "budgetMonsterOperations";
 const SETTINGS_KEY = "budgetMonsterSettings";
+const USERS_KEY = "budgetMonsterUsers";
+const SESSION_KEY = "budgetMonsterSession";
 const DEFAULT_CURRENCY = "KZT";
 
 const CURRENCY_OPTIONS = {
@@ -26,7 +28,22 @@ const CATEGORY_OPTIONS = {
 const ALL_CATEGORIES = [...new Set([...CATEGORY_OPTIONS.income, ...CATEGORY_OPTIONS.expense])];
 
 const refs = {
+  authScreen: document.getElementById("authScreen"),
+  appShell: document.getElementById("appShell"),
+  authForm: document.getElementById("authForm"),
+  authTabs: document.querySelectorAll(".auth-tab"),
+  authName: document.getElementById("authName"),
+  authPhone: document.getElementById("authPhone"),
+  authPassword: document.getElementById("authPassword"),
+  authConfirmPassword: document.getElementById("authConfirmPassword"),
+  authSubmitBtn: document.getElementById("authSubmitBtn"),
+  authError: document.getElementById("authError"),
   dialog: document.getElementById("operationDialog"),
+  accountSwitcherDialog: document.getElementById("accountSwitcherDialog"),
+  switcherAccountName: document.getElementById("switcherAccountName"),
+  switcherAccountPhone: document.getElementById("switcherAccountPhone"),
+  closeAccountSwitcherBtn: document.getElementById("closeAccountSwitcherBtn"),
+  addAccountBtn: document.getElementById("addAccountBtn"),
   form: document.getElementById("operationForm"),
   formNotice: document.getElementById("formNotice"),
   toggleFormBtn: document.getElementById("toggleFormBtn"),
@@ -50,18 +67,23 @@ const refs = {
   analyticsIncome: document.getElementById("analyticsIncome"),
   analyticsExpense: document.getElementById("analyticsExpense"),
   analyticsBalance: document.getElementById("analyticsBalance"),
+  analyticsOperationTotal: document.getElementById("analyticsOperationTotal"),
   analyticsOperationsCount: document.getElementById("analyticsOperationsCount"),
   allCategories: document.getElementById("allCategories"),
-  settingsOperationCount: document.getElementById("settingsOperationCount"),
   currencySelect: document.getElementById("currencySelect"),
-  clearOperationsBtn: document.getElementById("clearOperationsBtn")
+  clearOperationsBtn: document.getElementById("clearOperationsBtn"),
+  currentAccountDetails: document.getElementById("currentAccountDetails"),
+  logoutBtn: document.getElementById("logoutBtn"),
+  switchAccountBtn: document.getElementById("switchAccountBtn")
 };
 
 let operations = [];
 
 const state = {
   currentType: "income",
-  currency: DEFAULT_CURRENCY
+  currency: DEFAULT_CURRENCY,
+  user: null,
+  authMode: "register"
 };
 
 function getActiveCurrency() {
@@ -110,6 +132,40 @@ function loadOperations() {
 
 function saveOperations() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(operations));
+}
+
+function getUsers() {
+  try {
+    const raw = localStorage.getItem(USERS_KEY);
+    const users = raw ? JSON.parse(raw) : [];
+    return Array.isArray(users) ? users : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function setSessionUser(user) {
+  state.user = user;
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ phone: user.phone, name: user.name }));
+  renderCurrentAccount();
+}
+
+function clearSessionUser() {
+  state.user = null;
+  localStorage.removeItem(SESSION_KEY);
+  renderCurrentAccount();
+}
+
+function renderCurrentAccount() {
+  if (refs.currentAccountDetails) {
+    refs.currentAccountDetails.textContent = state.user
+      ? `${state.user.name} · ${formatPhoneInput(state.user.phone)}`
+      : "";
+  }
 }
 
 function getTodayISO() {
@@ -337,7 +393,7 @@ function calculateTotals() {
 
   renderAnalytics({ income, expense, balance });
   renderCategories();
-  refs.settingsOperationCount.textContent = String(operations.length);
+  renderCurrentAccount();
 
   return { income, expense, balance };
 }
@@ -346,6 +402,7 @@ function renderAnalytics(totals) {
   refs.analyticsIncome.textContent = formatMoney(totals.income);
   refs.analyticsExpense.textContent = formatMoney(totals.expense);
   refs.analyticsBalance.textContent = formatMoney(totals.balance);
+  refs.analyticsOperationTotal.textContent = String(operations.length);
   refs.analyticsOperationsCount.textContent = operations.length
     ? `Всего записей: ${operations.length} · Доходов: ${operations.filter((item) => item.type === "income").length} · Расходов: ${operations.filter((item) => item.type === "expense").length}`
     : "Пока нет операций. Добавьте первую запись на главной странице.";
@@ -589,6 +646,275 @@ function handleSubmit(event) {
   renderApp();
 }
 
+function setAuthMode(mode) {
+  state.authMode = mode;
+  refs.authTabs.forEach((button) => {
+    const isActive = button.dataset.authMode === mode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+
+  refs.authScreen.classList.toggle("register", mode === "register");
+  refs.authScreen.classList.toggle("login", mode === "login");
+  refs.authSubmitBtn.textContent = mode === "register" ? "Зарегистрироваться" : "Войти";
+  refs.authError.textContent = "";
+
+  refs.authName.value = refs.authName.value.trim();
+  refs.authPhone.value = refs.authPhone.value.trim();
+  refs.authPassword.value = refs.authPassword.value.trim();
+  refs.authConfirmPassword.value = refs.authConfirmPassword.value.trim();
+}
+
+function getPhoneDigits(value) {
+  const text = String(value || "").trim();
+  let digits = text.replace(/\D/g, "");
+
+  if (text.startsWith("+7") || (digits.length > 10 && digits.startsWith("7"))) {
+    digits = digits.slice(1);
+  }
+
+  const localDigits = digits.slice(0, 10);
+  return localDigits.length === 10 ? `7${localDigits}` : localDigits;
+}
+
+function formatPhoneInput(value) {
+  const text = String(value || "").trim();
+  let digits = text.replace(/\D/g, "");
+
+  if (text.startsWith("+7") || (digits.length > 10 && digits.startsWith("7"))) {
+    digits = digits.slice(1);
+  }
+
+  digits = digits.slice(0, 10);
+  const areaCode = digits.slice(0, 3);
+  const firstGroup = digits.slice(3, 6);
+  const secondGroup = digits.slice(6, 10);
+
+  let formatted = "+7";
+  if (areaCode) {
+    formatted += ` (${areaCode})`;
+  }
+  if (firstGroup) {
+    formatted += ` ${firstGroup}`;
+  }
+  if (secondGroup) {
+    formatted += ` ${secondGroup}`;
+  }
+
+  return formatted;
+}
+
+function getPhoneCaretPosition(value, digitCount) {
+  if (digitCount <= 0) {
+    return 3;
+  }
+
+  let digitsSeen = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    if (/\d/.test(value[index])) {
+      digitsSeen += 1;
+      if (digitsSeen === digitCount) {
+        return index + 1;
+      }
+    }
+  }
+
+  return value.length;
+}
+
+function sanitizeName(value) {
+  return String(value || "")
+    .replace(/[0-9]/g, "")
+    .replace(/^(\s*)(\p{L})/u, (_, leadingSpace, firstLetter) => (
+      `${leadingSpace}${firstLetter.toLocaleUpperCase("ru-RU")}`
+    ));
+}
+
+function validateAuthForm() {
+  const name = refs.authName.value.trim();
+  const phone = getPhoneDigits(refs.authPhone.value);
+  const password = refs.authPassword.value.trim();
+  const confirmPassword = refs.authConfirmPassword.value.trim();
+
+  const requiredValues = state.authMode === "register"
+    ? [name, phone, password, confirmPassword]
+    : [phone, password];
+
+  if (requiredValues.every((value) => !value)) {
+    refs.authError.textContent = "Заполните поля.";
+    return false;
+  }
+
+  if (state.authMode === "register") {
+    if (!name) {
+      refs.authError.textContent = "Введите имя.";
+      return false;
+    }
+    if (name.length < 2) {
+      refs.authError.textContent = "Имя должно содержать не менее 2 символов.";
+      return false;
+    }
+  }
+
+  if (!phone) {
+    refs.authError.textContent = "Введите номер.";
+    return false;
+  }
+  if (phone.length !== 11 || !phone.startsWith("7")) {
+    refs.authError.textContent = "Введите корректный номер телефона.";
+    return false;
+  }
+
+  if (!password) {
+    refs.authError.textContent = "Введите пароль.";
+    return false;
+  }
+  if (password.length < 6) {
+    refs.authError.textContent = "Введите пароль (не менее 6 символов).";
+    return false;
+  }
+
+  if (state.authMode === "register") {
+    if (!confirmPassword) {
+      refs.authError.textContent = "Подтвердите пароль.";
+      return false;
+    }
+    if (password !== confirmPassword) {
+      refs.authError.textContent = "Повторите пароль правильно.";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function handleAuthSubmit(event) {
+  event.preventDefault();
+  refs.authError.textContent = "";
+
+  if (!validateAuthForm()) {
+    return;
+  }
+
+  const users = getUsers();
+  const name = refs.authName.value.trim();
+  const phone = getPhoneDigits(refs.authPhone.value);
+  const password = refs.authPassword.value.trim();
+
+  if (state.authMode === "register") {
+    const existingUser = users.find((user) => user.phone === phone);
+    if (existingUser) {
+      refs.authError.textContent = "Пользователь с таким номером уже существует.";
+      return;
+    }
+
+    const newUser = {
+      id: Date.now(),
+      name,
+      phone,
+      password
+    };
+
+    users.push(newUser);
+    saveUsers(users);
+    enterAppAfterAuthentication(newUser);
+    return;
+  }
+
+  if (state.authMode === "login" && !users.some((item) => item.phone === phone)) {
+    refs.authError.textContent = "Аккаунт с таким номером не найден. Зарегистрируйтесь.";
+    return;
+  }
+
+  const user = users.find((item) => item.phone === phone && item.password === password);
+  if (!user) {
+    refs.authError.textContent = "Неверный номер или пароль.";
+    return;
+  }
+
+  enterAppAfterAuthentication(user);
+}
+
+function enterAppAfterAuthentication(user) {
+  setSessionUser(user);
+  refs.authSubmitBtn.disabled = true;
+  refs.authScreen.classList.add("is-exiting");
+
+  window.setTimeout(() => {
+    refs.authScreen.hidden = true;
+    refs.authScreen.classList.remove("is-exiting");
+    refs.appShell.hidden = false;
+    refs.appShell.classList.add("is-entering");
+    init();
+
+    refs.appShell.addEventListener("animationend", () => {
+      refs.appShell.classList.remove("is-entering");
+    }, { once: true });
+  }, 220);
+}
+
+function returnToAuthentication(mode) {
+  clearSessionUser();
+  refs.appShell.hidden = true;
+  refs.authScreen.hidden = false;
+  refs.authForm.reset();
+  refs.authError.textContent = "";
+  setAuthMode(mode);
+}
+
+function openAccountSwitcher() {
+  if (!state.user) {
+    return;
+  }
+
+  refs.switcherAccountName.textContent = state.user.name;
+  refs.switcherAccountPhone.textContent = formatPhoneInput(state.user.phone);
+  refs.accountSwitcherDialog.showModal();
+}
+
+function bindAuthEvents() {
+  document.querySelectorAll(".password-visibility-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = document.getElementById(button.dataset.passwordTarget);
+      const showPassword = input.type === "password";
+
+      input.type = showPassword ? "text" : "password";
+      button.textContent = showPassword ? "Скрыть" : "Показать";
+      button.setAttribute("aria-label", showPassword ? "Скрыть пароль" : "Показать пароль");
+      button.setAttribute("aria-pressed", String(showPassword));
+    });
+  });
+
+  refs.authName.addEventListener("input", () => {
+    refs.authName.value = sanitizeName(refs.authName.value);
+  });
+
+  refs.authPhone.addEventListener("input", () => {
+    const rawValue = refs.authPhone.value;
+    const rawCaret = refs.authPhone.selectionStart || 0;
+    const digitsBeforeCaret = rawValue.slice(0, rawCaret).replace(/\D/g, "").length;
+    const formattedValue = formatPhoneInput(rawValue);
+
+    refs.authPhone.value = formattedValue;
+    const caretPosition = getPhoneCaretPosition(formattedValue, digitsBeforeCaret);
+    refs.authPhone.setSelectionRange(caretPosition, caretPosition);
+  });
+
+  refs.authPhone.addEventListener("focus", () => {
+    if (!refs.authPhone.value) {
+      refs.authPhone.value = "+7 ";
+    }
+  });
+
+  refs.authTabs.forEach((button) => {
+    button.addEventListener("click", () => {
+      setAuthMode(button.dataset.authMode);
+    });
+  });
+
+  refs.authForm.addEventListener("submit", handleAuthSubmit);
+}
+
 function bindEvents() {
   refs.typeButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -687,6 +1013,29 @@ function bindEvents() {
     renderApp();
   });
 
+  refs.logoutBtn.addEventListener("click", () => {
+    returnToAuthentication("login");
+  });
+
+  refs.switchAccountBtn.addEventListener("click", () => {
+    openAccountSwitcher();
+  });
+
+  refs.closeAccountSwitcherBtn.addEventListener("click", () => {
+    refs.accountSwitcherDialog.close();
+  });
+
+  refs.accountSwitcherDialog.addEventListener("click", (event) => {
+    if (event.target === refs.accountSwitcherDialog) {
+      refs.accountSwitcherDialog.close();
+    }
+  });
+
+  refs.addAccountBtn.addEventListener("click", () => {
+    refs.accountSwitcherDialog.close();
+    returnToAuthentication("register");
+  });
+
   refs.navButtons.forEach((button) => {
     button.addEventListener("click", () => {
       showSection(button.dataset.section);
@@ -705,4 +1054,29 @@ function init() {
   renderApp();
 }
 
-init();
+function initAuthFlow() {
+  const savedSession = localStorage.getItem(SESSION_KEY);
+  if (savedSession) {
+    try {
+      const session = JSON.parse(savedSession);
+      const users = getUsers();
+      const user = users.find((item) => item.phone === session.phone && item.name === session.name);
+      if (user) {
+        state.user = user;
+        refs.authScreen.hidden = true;
+        refs.appShell.hidden = false;
+        init();
+        return;
+      }
+    } catch (error) {
+      clearSessionUser();
+    }
+  }
+
+  refs.appShell.hidden = true;
+  refs.authScreen.hidden = false;
+  setAuthMode("register");
+  bindAuthEvents();
+}
+
+initAuthFlow();

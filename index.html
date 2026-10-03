@@ -8,7 +8,53 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="page-shell">
+    <div id="authScreen" class="auth-screen" aria-live="polite">
+      <div class="auth-card">
+        <div class="auth-header">
+          <p class="eyebrow">СЧЕТЧИК БЮДЖЕТА</p>
+          <h2>Budget Monster</h2>
+        </div>
+
+        <div class="auth-tabs" role="tablist" aria-label="Вход или регистрация">
+          <button type="button" class="auth-tab is-active" data-auth-mode="register" aria-selected="true">Регистрация</button>
+          <button type="button" class="auth-tab" data-auth-mode="login" aria-selected="false">Войти</button>
+        </div>
+
+        <form id="authForm" class="auth-form" novalidate>
+          <div class="auth-field auth-field-name">
+            <label for="authName">Имя</label>
+            <input id="authName" name="name" type="text" placeholder="Введите имя" autocomplete="name" inputmode="text" />
+          </div>
+
+          <div class="auth-field">
+            <label for="authPhone">Телефон</label>
+            <input id="authPhone" name="phone" type="tel" placeholder="Введите номер" autocomplete="tel" inputmode="numeric" maxlength="18" />
+          </div>
+
+          <div class="auth-field">
+            <label for="authPassword">Пароль</label>
+            <div class="password-input-wrap">
+              <input id="authPassword" name="password" type="password" placeholder="Минимум 6 символов" autocomplete="new-password" />
+              <button type="button" class="password-visibility-toggle" data-password-target="authPassword" aria-label="Показать пароль" aria-pressed="false">Показать</button>
+            </div>
+          </div>
+
+          <div class="auth-field auth-field-confirm">
+            <label for="authConfirmPassword">Подтвердите пароль</label>
+            <div class="password-input-wrap">
+              <input id="authConfirmPassword" name="confirmPassword" type="password" placeholder="Повторите пароль" autocomplete="new-password" />
+              <button type="button" class="password-visibility-toggle" data-password-target="authConfirmPassword" aria-label="Показать пароль" aria-pressed="false">Показать</button>
+            </div>
+          </div>
+
+          <p id="authError" class="auth-error" role="alert"></p>
+
+          <button id="authSubmitBtn" type="submit" class="primary-button auth-submit">Зарегистрироваться</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="appShell" class="page-shell" hidden>
       <header class="topbar">
         <div class="brand" aria-label="Логотип Budget Monster">
           <div class="brand-mark" aria-hidden="true">M</div>
@@ -89,10 +135,31 @@
                   <textarea id="commentInput" rows="3" placeholder="Например, покупка продуктов"></textarea>
                 </div>
                 <div class="form-actions">
-                  <button type="submit" class="primary-button">Сохранить</button>
+                  <button type="submit" class="primary-button">Добавить</button>
                   <button id="cancelFormBtn" type="button" class="secondary-button">Отмена</button>
                 </div>
               </form>
+              </section>
+            </dialog>
+
+            <dialog id="accountSwitcherDialog" class="account-switcher-dialog" aria-labelledby="accountSwitcherHeading">
+              <section class="panel account-switcher-panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="eyebrow">УПРАВЛЕНИЕ АККАУНТАМИ</p>
+                    <h2 id="accountSwitcherHeading">Ваш аккаунт</h2>
+                  </div>
+                  <button id="closeAccountSwitcherBtn" class="dialog-close" type="button" aria-label="Закрыть окно">×</button>
+                </div>
+                <div class="account-switcher-current">
+                  <span class="account-avatar" aria-hidden="true">●</span>
+                  <div>
+                    <strong id="switcherAccountName"></strong>
+                    <span id="switcherAccountPhone"></span>
+                  </div>
+                  <span class="account-current-badge">Текущий</span>
+                </div>
+                <button type="button" id="addAccountBtn" class="primary-button">Добавить аккаунт</button>
               </section>
             </dialog>
 
@@ -168,6 +235,10 @@
                 <h2 id="monthlySummaryHeading">Сводка операций</h2>
               </div>
             </div>
+            <div class="analytics-operation-total">
+              <span>Количество операций</span>
+              <strong id="analyticsOperationTotal">0</strong>
+            </div>
             <p class="analytics-note" id="analyticsOperationsCount">Пока нет операций.</p>
           </section>
         </section>
@@ -204,48 +275,69 @@
                 <h2>Ваши данные</h2>
               </div>
             </div>
-            <div class="setting-row">
-              <div>
-                <h3>Хранение</h3>
-                <p>Операции сохраняются только в этом браузере и не отправляются на сервер.</p>
+            <section class="settings-group" aria-labelledby="accountSettingsHeading">
+              <h3 class="settings-group-title" id="accountSettingsHeading">Аккаунт</h3>
+              <div class="setting-row">
+                <div>
+                  <h3>Текущий аккаунт</h3>
+                  <p id="currentAccountDetails"></p>
+                </div>
               </div>
-              <span class="setting-badge">На устройстве</span>
-            </div>
-            <div class="setting-row">
-              <div>
-                <h3>Валюта</h3>
-                <p>Суммы показываются в выбранной валюте, а данные хранятся в тенге.</p>
+              <div class="setting-row">
+                <div>
+                  <h3>Сменить аккаунт</h3>
+                  <p>Войти под другим сохранённым аккаунтом.</p>
+                </div>
+                <button type="button" id="switchAccountBtn" class="secondary-button account-action-button">Сменить</button>
               </div>
-              <div class="currency-select-wrap">
-                <label class="sr-only" for="currencySelect">Валюта</label>
-                <select id="currencySelect" aria-label="Выбор валюты">
-                  <option value="KZT">Тенге (₸)</option>
-                  <option value="USD">Доллар ($)</option>
-                  <option value="EUR">Евро (€)</option>
-                  <option value="RUB">Рубль (₽)</option>
-                </select>
+              <div class="setting-row">
+                <div>
+                  <h3>Выйти из аккаунта</h3>
+                  <p>Завершить текущий сеанс на этом устройстве.</p>
+                </div>
+                <button type="button" id="logoutBtn" class="secondary-button account-action-button">Выйти</button>
               </div>
-            </div>
-            <div class="setting-row">
-              <div>
-                <h3>Количество операций</h3>
-                <p>Записей в локальной истории</p>
+            </section>
+            <section class="settings-group" aria-labelledby="preferencesSettingsHeading">
+              <h3 class="settings-group-title" id="preferencesSettingsHeading">Предпочтения</h3>
+              <div class="setting-row">
+                <div>
+                  <h3>Валюта</h3>
+                  <p>Суммы показываются в выбранной валюте, а данные хранятся в тенге.</p>
+                </div>
+                <div class="currency-select-wrap">
+                  <label class="sr-only" for="currencySelect">Валюта</label>
+                  <select id="currencySelect" aria-label="Выбор валюты">
+                    <option value="KZT">Тенге (₸)</option>
+                    <option value="USD">Доллар ($)</option>
+                    <option value="EUR">Евро (€)</option>
+                    <option value="RUB">Рубль (₽)</option>
+                  </select>
+                </div>
               </div>
-              <strong id="settingsOperationCount">0</strong>
-            </div>
-            <div class="setting-row setting-danger">
-              <div>
-                <h3>Очистить историю</h3>
-                <p>Удалить все операции и пересчитать сводные суммы.</p>
+            </section>
+            <section class="settings-group" aria-labelledby="dataSettingsHeading">
+              <h3 class="settings-group-title" id="dataSettingsHeading">Данные и хранение</h3>
+              <div class="setting-row">
+                <div>
+                  <h3>Хранение</h3>
+                  <p>Операции сохраняются только в этом браузере и не отправляются на сервер.</p>
+                </div>
+                <span class="setting-badge">На устройстве</span>
               </div>
-              <button type="button" id="clearOperationsBtn" class="danger-button">Удалить все</button>
-            </div>
+              <div class="setting-row setting-danger">
+                <div>
+                  <h3>Очистить историю</h3>
+                  <p>Удалить все операции и пересчитать сводные суммы.</p>
+                </div>
+                <button type="button" id="clearOperationsBtn" class="danger-button">Удалить все</button>
+              </div>
+            </section>
           </section>
         </section>
       </main>
-    </div>
 
-    <nav class="mobile-nav" aria-label="Разделы приложения">
+      <nav class="mobile-nav" aria-label="Разделы приложения">
       <button type="button" class="mobile-nav-button is-active" data-section="home" aria-current="page">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" /></svg>
         <span>Главная</span>
@@ -262,9 +354,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1-.1 1.7Z" /></svg>
         <span>Настройки</span>
       </button>
-    </nav>
+      </nav>
 
-    <p class="header-note site-footer-note">Финансы под контролем — данные хранятся на устройстве</p>
+      <p class="header-note site-footer-note">Финансы под контролем — данные хранятся на устройстве</p>
+    </div>
 
     <script src="script.js"></script>
   </body>
