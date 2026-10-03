@@ -260,24 +260,24 @@ h1 {
 }
 
 .account-switcher-dialog {
-  width: min(440px, calc(100% - 28px));
-  max-width: none;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-}
-
-.account-switcher-dialog[open] {
-  animation: dialog-enter 0.2s ease-out;
-}
-
-.account-switcher-dialog::backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 14px;
   background: rgba(3, 7, 14, 0.72);
   backdrop-filter: blur(7px);
 }
 
+.account-switcher-dialog[hidden] {
+  display: none;
+}
+
 .account-switcher-panel {
+  width: min(440px, 100%);
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
   padding: 22px;
 }
 
@@ -938,6 +938,10 @@ h1 {
   display: none;
 }
 
+.auth-screen.add-account-mode .auth-tabs {
+  display: none;
+}
+
 .auth-screen.is-exiting {
   animation: auth-exit 0.22s ease-in forwards;
   pointer-events: none;
@@ -1249,34 +1253,34 @@ h1 {
     transform: translateY(8px);
   }
 
-  @keyframes auth-exit {
-    to {
-      opacity: 0;
-      transform: scale(0.97);
-    }
-  }
-
-  @keyframes app-enter {
-    from {
-      opacity: 0;
-      transform: translateY(18px) scale(0.985);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .auth-screen.is-exiting,
-    #appShell.is-entering {
-      animation-duration: 1ms;
-    }
-  }
-
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes auth-exit {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes app-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-screen.is-exiting,
+  #appShell.is-entering {
+    animation-duration: 1ms;
   }
 }
 

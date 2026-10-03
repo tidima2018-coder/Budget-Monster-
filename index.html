@@ -11,8 +11,8 @@
     <div id="authScreen" class="auth-screen" aria-live="polite">
       <div class="auth-card">
         <div class="auth-header">
-          <p class="eyebrow">СЧЕТЧИК БЮДЖЕТА</p>
-          <h2>Budget Monster</h2>
+          <p id="authEyebrow" class="eyebrow">СЧЕТЧИК БЮДЖЕТА</p>
+          <h2 id="authHeading">Budget Monster</h2>
         </div>
 
         <div class="auth-tabs" role="tablist" aria-label="Вход или регистрация">
@@ -139,27 +139,6 @@
                   <button id="cancelFormBtn" type="button" class="secondary-button">Отмена</button>
                 </div>
               </form>
-              </section>
-            </dialog>
-
-            <dialog id="accountSwitcherDialog" class="account-switcher-dialog" aria-labelledby="accountSwitcherHeading">
-              <section class="panel account-switcher-panel">
-                <div class="panel-header">
-                  <div>
-                    <p class="eyebrow">УПРАВЛЕНИЕ АККАУНТАМИ</p>
-                    <h2 id="accountSwitcherHeading">Ваш аккаунт</h2>
-                  </div>
-                  <button id="closeAccountSwitcherBtn" class="dialog-close" type="button" aria-label="Закрыть окно">×</button>
-                </div>
-                <div class="account-switcher-current">
-                  <span class="account-avatar" aria-hidden="true">●</span>
-                  <div>
-                    <strong id="switcherAccountName"></strong>
-                    <span id="switcherAccountPhone"></span>
-                  </div>
-                  <span class="account-current-badge">Текущий</span>
-                </div>
-                <button type="button" id="addAccountBtn" class="primary-button">Добавить аккаунт</button>
               </section>
             </dialog>
 
@@ -357,6 +336,27 @@
       </nav>
 
       <p class="header-note site-footer-note">Финансы под контролем — данные хранятся на устройстве</p>
+    </div>
+
+    <div id="accountSwitcherDialog" class="account-switcher-dialog" role="dialog" aria-modal="true" aria-labelledby="accountSwitcherHeading" hidden>
+      <section class="panel account-switcher-panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">УПРАВЛЕНИЕ АККАУНТАМИ</p>
+            <h2 id="accountSwitcherHeading">Ваш аккаунт</h2>
+          </div>
+          <button id="closeAccountSwitcherBtn" class="dialog-close" type="button" aria-label="Закрыть окно">×</button>
+        </div>
+        <div class="account-switcher-current">
+          <span class="account-avatar" aria-hidden="true">●</span>
+          <div>
+            <strong id="switcherAccountName"></strong>
+            <span id="switcherAccountPhone"></span>
+          </div>
+          <span class="account-current-badge">Текущий</span>
+        </div>
+        <button type="button" id="addAccountBtn" class="primary-button">Добавить аккаунт</button>
+      </section>
     </div>
 
     <script src="script.js"></script>

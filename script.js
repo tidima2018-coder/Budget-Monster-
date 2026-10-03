@@ -29,6 +29,8 @@ const ALL_CATEGORIES = [...new Set([...CATEGORY_OPTIONS.income, ...CATEGORY_OPTI
 
 const refs = {
   authScreen: document.getElementById("authScreen"),
+  authEyebrow: document.getElementById("authEyebrow"),
+  authHeading: document.getElementById("authHeading"),
   appShell: document.getElementById("appShell"),
   authForm: document.getElementById("authForm"),
   authTabs: document.querySelectorAll(".auth-tab"),
@@ -853,13 +855,20 @@ function enterAppAfterAuthentication(user) {
   }, 220);
 }
 
-function returnToAuthentication(mode) {
+function returnToAuthentication(mode, addingAccount = false) {
   clearSessionUser();
   refs.appShell.hidden = true;
   refs.authScreen.hidden = false;
+  refs.authScreen.classList.toggle("add-account-mode", addingAccount);
   refs.authForm.reset();
   refs.authError.textContent = "";
+  refs.authSubmitBtn.disabled = false;
   setAuthMode(mode);
+  refs.authEyebrow.textContent = addingAccount ? "УПРАВЛЕНИЕ АККАУНТАМИ" : "СЧЕТЧИК БЮДЖЕТА";
+  refs.authHeading.textContent = addingAccount ? "Добавьте новый аккаунт" : "Budget Monster";
+  if (addingAccount) {
+    refs.authSubmitBtn.textContent = "Добавить аккаунт";
+  }
 }
 
 function openAccountSwitcher() {
@@ -869,7 +878,8 @@ function openAccountSwitcher() {
 
   refs.switcherAccountName.textContent = state.user.name;
   refs.switcherAccountPhone.textContent = formatPhoneInput(state.user.phone);
-  refs.accountSwitcherDialog.showModal();
+  refs.accountSwitcherDialog.hidden = false;
+  refs.closeAccountSwitcherBtn.focus();
 }
 
 function bindAuthEvents() {
@@ -1022,18 +1032,24 @@ function bindEvents() {
   });
 
   refs.closeAccountSwitcherBtn.addEventListener("click", () => {
-    refs.accountSwitcherDialog.close();
+    refs.accountSwitcherDialog.hidden = true;
   });
 
   refs.accountSwitcherDialog.addEventListener("click", (event) => {
     if (event.target === refs.accountSwitcherDialog) {
-      refs.accountSwitcherDialog.close();
+      refs.accountSwitcherDialog.hidden = true;
     }
   });
 
   refs.addAccountBtn.addEventListener("click", () => {
-    refs.accountSwitcherDialog.close();
-    returnToAuthentication("register");
+    refs.accountSwitcherDialog.hidden = true;
+    returnToAuthentication("register", true);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !refs.accountSwitcherDialog.hidden) {
+      refs.accountSwitcherDialog.hidden = true;
+    }
   });
 
   refs.navButtons.forEach((button) => {
