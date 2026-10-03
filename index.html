@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2eaff" />
+    <title>Budget Monster</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div class="brand" aria-label="Логотип Budget Monster">
+          <div class="brand-mark" aria-hidden="true">M</div>
+          <div>
+            <p class="eyebrow">Личный бюджет</p>
+            <h1>Budget Monster</h1>
+          </div>
+        </div>
+      </header>
+
+      <main aria-label="Приложение для учета бюджета">
+        <section class="page-view" id="homeView" aria-labelledby="homeHeading">
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">ТВОИ ФИНАНСЫ</p>
+              <h2 id="homeHeading">Главная</h2>
+            </div>
+          </div>
+
+          <div class="app-grid">
+            <aside class="panel info-panel" aria-label="Сводка бюджета">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Сводка</p>
+                  <h2>Бюджет</h2>
+                </div>
+              </div>
+              <div class="stat-stack">
+                <div class="stat-block income">
+                  <span>Доходы</span>
+                  <strong id="incomeSummary">0 ₽</strong>
+                </div>
+                <div class="stat-block expense">
+                  <span>Расходы</span>
+                  <strong id="expenseSummary">0 ₽</strong>
+                </div>
+                <div class="stat-block balance">
+                  <span>Остаток</span>
+                  <strong id="balanceSummary">0 ₽</strong>
+                </div>
+              </div>
+            </aside>
+
+            <dialog id="operationDialog" class="operation-dialog" aria-labelledby="formHeading">
+              <section class="panel form-panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="eyebrow">Новая запись</p>
+                    <h2 id="formHeading">Добавить операцию</h2>
+                  </div>
+                  <button id="closeFormBtn" class="dialog-close" type="button" aria-label="Закрыть окно">×</button>
+                </div>
+              <p id="formNotice" class="form-notice" role="alert" hidden>Недостаточно средств</p>
+              <form id="operationForm" class="operation-form" novalidate>
+                <div class="type-switch" role="tablist" aria-label="Тип операции">
+                  <button type="button" class="type-option is-active" data-type="income" aria-pressed="true">Доход</button>
+                  <button type="button" class="type-option" data-type="expense" aria-pressed="false">Расход</button>
+                </div>
+                <div class="field">
+                  <label for="amountInput">Сумма</label>
+                  <input id="amountInput" name="amount" type="text" inputmode="decimal" placeholder="Введите сумму" aria-invalid="false" />
+                  <p class="field-error" data-error-for="amount" aria-live="polite"></p>
+                </div>
+                <div class="field">
+                  <label for="categorySelect">Категория</label>
+                  <select id="categorySelect" aria-invalid="false">
+                    <option value="">Выберите категорию</option>
+                  </select>
+                  <p class="field-error" data-error-for="category" aria-live="polite"></p>
+                </div>
+                <div class="field">
+                  <label for="dateInput">Дата</label>
+                  <input id="dateInput" type="text" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" aria-invalid="false" autocomplete="off" />
+                  <p class="field-error" data-error-for="date" aria-live="polite"></p>
+                </div>
+                <div class="field">
+                  <label for="commentInput">Комментарий</label>
+                  <textarea id="commentInput" rows="3" placeholder="Например, покупка продуктов"></textarea>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="primary-button">Сохранить</button>
+                  <button id="cancelFormBtn" type="button" class="secondary-button">Отмена</button>
+                </div>
+              </form>
+              </section>
+            </dialog>
+
+            <aside class="panel list-panel" aria-label="Последние операции">
+              <div class="panel-header operations-header">
+                <div>
+                  <p class="eyebrow">Операции</p>
+                  <h2>Последние операции</h2>
+                </div>
+              </div>
+              <div class="filters" aria-label="Фильтры операций">
+                <label class="field compact-field">
+                  <span>Тип</span>
+                  <select id="typeFilter">
+                    <option value="all">Все</option>
+                    <option value="income">Доходы</option>
+                    <option value="expense">Расходы</option>
+                  </select>
+                </label>
+                <label class="field compact-field">
+                  <span>Категория</span>
+                  <select id="categoryFilter">
+                    <option value="all">Все категории</option>
+                  </select>
+                </label>
+              </div>
+              <div id="emptyState" class="empty-state" aria-live="polite">
+                <div class="empty-inner">
+                  <h3>Операций пока нет</h3>
+                  <p>Добавьте первый доход или расход, чтобы начать контролировать свой бюджет.</p>
+                  <button type="button" class="primary-button" data-open-form>+ Добавить операцию</button>
+                </div>
+              </div>
+              <ul id="operationsList" class="operations-list" aria-live="polite"></ul>
+            </aside>
+          </div>
+        </section>
+
+        <section class="page-view" id="analyticsView" aria-labelledby="analyticsHeading" hidden>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">ОБЗОР ДВИЖЕНИЯ ДЕНЕГ</p>
+              <h2 id="analyticsHeading">Аналитика</h2>
+            </div>
+          </div>
+          <div class="analytics-summary">
+            <article class="panel analytics-card income">
+              <span>Всего доходов</span>
+              <strong id="analyticsIncome">0 ₽</strong>
+            </article>
+            <article class="panel analytics-card expense">
+              <span>Всего расходов</span>
+              <strong id="analyticsExpense">0 ₽</strong>
+            </article>
+            <article class="panel analytics-card balance">
+              <span>Текущий остаток</span>
+              <strong id="analyticsBalance">0 ₽</strong>
+            </article>
+          </div>
+          <section class="panel analytics-panel" aria-labelledby="analyticsCategoriesHeading">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">РАСХОДЫ</p>
+                <h2 id="analyticsCategoriesHeading">Расходы по категориям</h2>
+              </div>
+            </div>
+            <div id="categoryBreakdown" class="category-breakdown"></div>
+          </section>
+          <section class="panel analytics-panel" aria-labelledby="monthlySummaryHeading">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">ОПЕРАЦИИ</p>
+                <h2 id="monthlySummaryHeading">Сводка операций</h2>
+              </div>
+            </div>
+            <p class="analytics-note" id="analyticsOperationsCount">Пока нет операций.</p>
+          </section>
+        </section>
+
+        <section class="page-view" id="categoriesView" aria-labelledby="categoriesHeading" hidden>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">СТРУКТУРА БЮДЖЕТА</p>
+              <h2 id="categoriesHeading">Категории</h2>
+            </div>
+          </div>
+          <section class="panel categories-panel" aria-label="Суммы по категориям">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">ВСЕ ОПЕРАЦИИ</p>
+                <h2>Итоги по категориям</h2>
+              </div>
+            </div>
+            <div id="allCategories" class="all-categories"></div>
+          </section>
+        </section>
+
+        <section class="page-view" id="settingsView" aria-labelledby="settingsHeading" hidden>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">ПАРАМЕТРЫ ПРИЛОЖЕНИЯ</p>
+              <h2 id="settingsHeading">Настройки</h2>
+            </div>
+          </div>
+          <section class="panel settings-panel" aria-label="Настройки хранения данных">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">ПРИЛОЖЕНИЕ</p>
+                <h2>Ваши данные</h2>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <h3>Хранение</h3>
+                <p>Операции сохраняются только в этом браузере и не отправляются на сервер.</p>
+              </div>
+              <span class="setting-badge">На устройстве</span>
+            </div>
+            <div class="setting-row">
+              <div>
+                <h3>Валюта</h3>
+                <p>Суммы показываются в выбранной валюте, а данные хранятся в тенге.</p>
+              </div>
+              <div class="currency-select-wrap">
+                <label class="sr-only" for="currencySelect">Валюта</label>
+                <select id="currencySelect" aria-label="Выбор валюты">
+                  <option value="KZT">Тенге (₸)</option>
+                  <option value="USD">Доллар ($)</option>
+                  <option value="EUR">Евро (€)</option>
+                  <option value="RUB">Рубль (₽)</option>
+                </select>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <h3>Количество операций</h3>
+                <p>Записей в локальной истории</p>
+              </div>
+              <strong id="settingsOperationCount">0</strong>
+            </div>
+            <div class="setting-row setting-danger">
+              <div>
+                <h3>Очистить историю</h3>
+                <p>Удалить все операции и пересчитать сводные суммы.</p>
+              </div>
+              <button type="button" id="clearOperationsBtn" class="danger-button">Удалить все</button>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <nav class="mobile-nav" aria-label="Разделы приложения">
+      <button type="button" class="mobile-nav-button is-active" data-section="home" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" /></svg>
+        <span>Главная</span>
+      </button>
+      <button type="button" class="mobile-nav-button" data-section="analytics">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5m0 14h17M8 15v-4m5 4V7m5 8V9" /></svg>
+        <span>Аналитика</span>
+      </button>
+      <button type="button" class="mobile-nav-button" data-section="categories">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13 11 22l-9-9V2h11l7 7a3 3 0 0 1 0 4Z" /><circle cx="7" cy="7" r="1" /></svg>
+        <span>Категории</span>
+      </button>
+      <button type="button" class="mobile-nav-button" data-section="settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1-.1 1.7Z" /></svg>
+        <span>Настройки</span>
+      </button>
+    </nav>
+
+    <p class="header-note site-footer-note">Финансы под контролем — данные хранятся на устройстве</p>
+
+    <script src="script.js"></script>
+  </body>
+</html>
