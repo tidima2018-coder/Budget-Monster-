@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
@@ -57,7 +57,7 @@
     <div id="appShell" class="page-shell" hidden>
       <header class="topbar">
         <div class="brand" aria-label="Логотип Budget Monster">
-          <div class="brand-mark" aria-hidden="true">M</div>
+          <div id="brandAvatar" class="brand-mark" aria-hidden="true">M</div>
           <div>
             <p class="eyebrow">Личный бюджет</p>
             <h1>Budget Monster</h1>
@@ -118,6 +118,7 @@
                   <input id="amountInput" name="amount" type="text" inputmode="decimal" placeholder="Введите сумму" aria-invalid="false" />
                   <p class="field-error" data-error-for="amount" aria-live="polite"></p>
                 </div>
+                <p id="operationLimitHint" class="operation-limit-hint" aria-live="polite" hidden></p>
                 <div class="field">
                   <label for="categorySelect">Категория</label>
                   <select id="categorySelect" aria-invalid="false">
@@ -175,6 +176,56 @@
               <button type="button" class="primary-button operations-add-action" data-open-form>+ Добавить операцию</button>
             </aside>
           </div>
+          <section class="panel spending-limit-panel" aria-labelledby="spendingLimitHeading">
+            <div class="spending-limit-top">
+              <div class="spending-limit-heading">
+                <p class="eyebrow">ПЛАН РАСХОДОВ</p>
+                <h2 id="spendingLimitHeading">Лимит на период</h2>
+                <p id="spendingLimitStatus" class="spending-limit-status" aria-live="polite">Задайте лимит, чтобы контролировать расходы и доступную сумму.</p>
+              </div>
+              <form id="spendingLimitForm" class="spending-limit-form">
+                <label class="field" for="spendingLimitAmount">
+                  <span>Общий лимит</span>
+                  <input id="spendingLimitAmount" type="number" min="0" step="any" inputmode="decimal" placeholder="Например, 50000" />
+                </label>
+                <label class="field" for="spendingLimitPeriod">
+                  <span>Период</span>
+                  <select id="spendingLimitPeriod">
+                    <option value="week">Неделя</option>
+                    <option value="month">Месяц</option>
+                    <option value="2months">2 месяца</option>
+                    <option value="3months">3 месяца</option>
+                    <option value="year">Год</option>
+                  </select>
+                </label>
+                <button class="primary-button" type="submit">Сохранить лимит</button>
+              </form>
+            </div>
+            <div class="spending-limit-track" role="progressbar" aria-label="Использование лимита" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="spendingLimitProgress"></span></div>
+            <div class="spending-limit-metrics">
+              <article class="spending-limit-metric is-remaining">
+                <span>Можно потратить</span>
+                <strong id="spendingLimitRemaining">—</strong>
+                <small>до конца периода</small>
+              </article>
+              <article class="spending-limit-metric">
+                <span>Осталось дней</span>
+                <strong id="spendingLimitDays">—</strong>
+                <small>в текущем периоде</small>
+              </article>
+              <article class="spending-limit-metric">
+                <span>Доступно в день</span>
+                <strong id="spendingLimitDaily">—</strong>
+                <small>если распределить остаток</small>
+              </article>
+              <article class="spending-limit-metric is-spent">
+                <span>Уже потрачено</span>
+                <strong id="spendingLimitSpent">—</strong>
+                <small>из установленного лимита</small>
+              </article>
+            </div>
+            <p id="spendingLimitHint" class="spending-limit-hint">Расходы сверх доступного остатка будут отклоняться.</p>
+          </section>
         </section>
 
         <section class="page-view" id="analyticsView" aria-labelledby="analyticsHeading" hidden>
@@ -261,6 +312,14 @@
                   <h3>Текущий аккаунт</h3>
                   <p id="currentAccountDetails"></p>
                 </div>
+                <div class="avatar-setting-control">
+                  <div id="currentAvatar" class="account-avatar" aria-hidden="true">?</div>
+                  <div class="avatar-action-stack">
+                    <label for="avatarFileInput" class="secondary-button avatar-change-button">Сменить аватар</label>
+                    <p id="avatarStatus" class="avatar-status" aria-live="polite"></p>
+                  </div>
+                  <input id="avatarFileInput" class="sr-only" type="file" accept="image/*" />
+                </div>
               </div>
               <div class="setting-row">
                 <div>
@@ -278,21 +337,39 @@
               </div>
             </section>
             <section class="settings-group" aria-labelledby="preferencesSettingsHeading">
-              <h3 class="settings-group-title" id="preferencesSettingsHeading">Предпочтения</h3>
+              <h3 class="settings-group-title" id="preferencesSettingsHeading">Смена валюты</h3>
               <div class="setting-row">
                 <div>
                   <h3>Валюта</h3>
-                  <p>Суммы показываются в выбранной валюте, а данные хранятся в тенге.</p>
+                  <p>Выберите валюту отображения. Записи хранятся в тенге, курсы справочные.</p>
                 </div>
-                <div class="currency-select-wrap">
-                  <label class="sr-only" for="currencySelect">Валюта</label>
-                  <select id="currencySelect" aria-label="Выбор валюты">
-                    <option value="KZT">Тенге (₸)</option>
-                    <option value="USD">Доллар ($)</option>
-                    <option value="EUR">Евро (€)</option>
-                    <option value="RUB">Рубль (₽)</option>
-                  </select>
+                <div class="currency-picker">
+                  <div id="currencyCurrent" class="currency-current" aria-live="polite"></div>
+                  <label class="sr-only" for="currencySearch">Найти валюту</label>
+                  <input id="currencySearch" class="currency-search" type="search" placeholder="Найти валюту или код" autocomplete="off" />
+                  <div id="currencyChoices" class="currency-choices" role="group" aria-label="Выберите валюту"></div>
+                  <p class="currency-rate-note">Справочные курсы НБК на 04.10.2026</p>
                 </div>
+              </div>
+            </section>
+            <section class="settings-group" aria-labelledby="appearanceSettingsHeading">
+              <h3 class="settings-group-title" id="appearanceSettingsHeading">Оформление</h3>
+              <div class="setting-row">
+                <div>
+                  <h3>Версия сайта</h3>
+                  <p>Выберите ширину рабочей области для компьютера или телефона.</p>
+                </div>
+                <div class="layout-mode-picker" role="group" aria-label="Ширина сайта">
+                  <button type="button" class="layout-mode-button" data-layout-mode="desktop" aria-pressed="true">Для ПК</button>
+                  <button type="button" class="layout-mode-button" data-layout-mode="mobile" aria-pressed="false">Для телефона</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <h3>Тема приложения</h3>
+                  <p>Переключите оформление между светлой и тёмной темой.</p>
+                </div>
+                <button type="button" id="themeToggleBtn" class="theme-toggle" aria-pressed="false"><span class="theme-toggle-icon" aria-hidden="true">☾</span><span class="theme-toggle-label">Тёмная</span></button>
               </div>
             </section>
             <section class="settings-group" aria-labelledby="dataSettingsHeading">
@@ -348,12 +425,17 @@
           <button id="closeAccountSwitcherBtn" class="dialog-close" type="button" aria-label="Закрыть окно">×</button>
         </div>
         <div class="account-switcher-current">
-          <span class="account-avatar" aria-hidden="true">●</span>
+          <span id="switcherAvatar" class="account-avatar" aria-hidden="true">●</span>
           <div>
             <strong id="switcherAccountName"></strong>
             <span id="switcherAccountPhone"></span>
           </div>
           <span class="account-current-badge">Текущий</span>
+        </div>
+        <div class="saved-accounts-section">
+          <h3>Предыдущие аккаунты</h3>
+          <div id="savedAccountsList" class="saved-accounts-list"></div>
+          <p id="noSavedAccounts" class="saved-accounts-empty" hidden>Других аккаунтов пока нет. Добавьте аккаунт, чтобы он появился здесь.</p>
         </div>
         <button type="button" id="addAccountBtn" class="primary-button">Добавить аккаунт</button>
       </section>
@@ -379,3 +461,4 @@
     <script src="script.js"></script>
   </body>
 </html>
+

@@ -5,10 +5,28 @@ const SESSION_KEY = "budgetMonsterSession";
 const DEFAULT_CURRENCY = "KZT";
 
 const CURRENCY_OPTIONS = {
-  KZT: { label: "Тенге", symbol: "₸", rate: 1, decimals: 0 },
-  USD: { label: "Доллар", symbol: "$", rate: 450, decimals: 2 },
-  EUR: { label: "Евро", symbol: "€", rate: 540, decimals: 2 },
-  RUB: { label: "Рубль", symbol: "₽", rate: 6.6, decimals: 2 }
+  KZT: { label: "Казахстанский тенге", symbol: "₸", rate: 1, decimals: 0 },
+  USD: { label: "Доллар США", symbol: "$", rate: 447.73, decimals: 2 },
+  EUR: { label: "Евро", symbol: "€", rate: 502.98, decimals: 2 },
+  RUB: { label: "Российский рубль", symbol: "₽", rate: 5.35, decimals: 2 },
+  CNY: { label: "Китайский юань", symbol: "¥", rate: 66.78, decimals: 2 },
+  GBP: { label: "Фунт стерлингов", symbol: "£", rate: 591.14, decimals: 2 },
+  TRY: { label: "Турецкая лира", symbol: "₺", rate: 9.11, decimals: 2 },
+  UZS: { label: "Узбекский сум", symbol: "сўм", rate: 0.038, decimals: 0 },
+  KGS: { label: "Кыргызский сом", symbol: "сом", rate: 5.12, decimals: 2 },
+  AED: { label: "Дирхам ОАЭ", symbol: "د.إ", rate: 121.91, decimals: 2 },
+  AUD: { label: "Австралийский доллар", symbol: "A$", rate: 310.5, decimals: 2 },
+  CAD: { label: "Канадский доллар", symbol: "C$", rate: 314.46, decimals: 2 },
+  CHF: { label: "Швейцарский франк", symbol: "Fr", rate: 540.41, decimals: 2 },
+  JPY: { label: "Японская иена", symbol: "¥", rate: 2.84, decimals: 0 },
+  INR: { label: "Индийская рупия", symbol: "₹", rate: 4.65, decimals: 2 },
+  BYN: { label: "Белорусский рубль", symbol: "Br", rate: 149.11, decimals: 2 },
+  GEL: { label: "Грузинский лари", symbol: "₾", rate: 174.49, decimals: 2 },
+  AZN: { label: "Азербайджанский манат", symbol: "₼", rate: 264.15, decimals: 2 },
+  UAH: { label: "Украинская гривна", symbol: "₴", rate: 9.95, decimals: 2 },
+  PLN: { label: "Польский злотый", symbol: "zł", rate: 114.96, decimals: 2 },
+  SGD: { label: "Сингапурский доллар", symbol: "S$", rate: 349.79, decimals: 2 },
+  THB: { label: "Тайский бат", symbol: "฿", rate: 13.34, decimals: 2 }
 };
 
 const CATEGORY_OPTIONS = {
@@ -77,20 +95,45 @@ const refs = {
   analyticsOperationTotal: document.getElementById("analyticsOperationTotal"),
   analyticsOperationsCount: document.getElementById("analyticsOperationsCount"),
   allCategories: document.getElementById("allCategories"),
-  currencySelect: document.getElementById("currencySelect"),
+  currencySearch: document.getElementById("currencySearch"),
+  currencyChoices: document.getElementById("currencyChoices"),
+  currencyCurrent: document.getElementById("currencyCurrent"),
   clearOperationsBtn: document.getElementById("clearOperationsBtn"),
   currentAccountDetails: document.getElementById("currentAccountDetails"),
   logoutBtn: document.getElementById("logoutBtn"),
-  switchAccountBtn: document.getElementById("switchAccountBtn")
+  switchAccountBtn: document.getElementById("switchAccountBtn"),
+  savedAccountsList: document.getElementById("savedAccountsList"),
+  noSavedAccounts: document.getElementById("noSavedAccounts"),
+  avatarFileInput: document.getElementById("avatarFileInput"),
+  avatarStatus: document.getElementById("avatarStatus"),
+  currentAvatar: document.getElementById("currentAvatar"),
+  switcherAvatar: document.getElementById("switcherAvatar"),
+  brandAvatar: document.getElementById("brandAvatar"),
+  spendingLimitForm: document.getElementById("spendingLimitForm"),
+  spendingLimitAmount: document.getElementById("spendingLimitAmount"),
+  spendingLimitPeriod: document.getElementById("spendingLimitPeriod"),
+  spendingLimitStatus: document.getElementById("spendingLimitStatus"),
+  spendingLimitProgress: document.getElementById("spendingLimitProgress"),
+  spendingLimitRemaining: document.getElementById("spendingLimitRemaining"),
+  spendingLimitDays: document.getElementById("spendingLimitDays"),
+  spendingLimitDaily: document.getElementById("spendingLimitDaily"),
+  spendingLimitSpent: document.getElementById("spendingLimitSpent"),
+  spendingLimitHint: document.getElementById("spendingLimitHint"),
+  operationLimitHint: document.getElementById("operationLimitHint")
 };
 
 let operations = [];
 let operationPendingDelete = null;
 let deleteDialogTrigger = null;
+let authEventsBound = false;
+let currencyPickerBound = false;
 
 const state = {
   currentType: "income",
   currency: DEFAULT_CURRENCY,
+  theme: "dark",
+  layoutMode: "desktop",
+  spendingLimit: { amount: 0, period: "month" },
   user: null,
   authMode: "register"
 };
@@ -117,13 +160,96 @@ function loadSettings() {
     const parsed = raw ? JSON.parse(raw) : {};
     const candidate = parsed.currency || DEFAULT_CURRENCY;
     state.currency = CURRENCY_OPTIONS[candidate] ? candidate : DEFAULT_CURRENCY;
+    state.theme = parsed.theme === "light" ? "light" : "dark";
+    state.layoutMode = parsed.layoutMode === "mobile" ? "mobile" : "desktop";
+    const limit = parsed.spendingLimit || {};
+    state.spendingLimit = {
+      amount: Number(limit.amount) > 0 ? Number(limit.amount) : 0,
+      period: ["week", "month", "2months", "3months", "year"].includes(limit.period) ? limit.period : "month"
+    };
   } catch (error) {
     state.currency = DEFAULT_CURRENCY;
+    state.theme = "dark";
+    state.layoutMode = "desktop";
+    state.spendingLimit = { amount: 0, period: "month" };
   }
 }
 
 function saveSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ currency: state.currency }));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ currency: state.currency, theme: state.theme, layoutMode: state.layoutMode, spendingLimit: state.spendingLimit }));
+}
+
+function renderCurrencyPicker() {
+  const selected = CURRENCY_OPTIONS[state.currency] || CURRENCY_OPTIONS[DEFAULT_CURRENCY];
+  refs.currencyCurrent.replaceChildren();
+  const symbol = document.createElement("span");
+  symbol.className = "currency-current-symbol";
+  symbol.setAttribute("aria-hidden", "true");
+  symbol.textContent = selected.symbol;
+  const details = document.createElement("span");
+  details.className = "currency-current-details";
+  const name = document.createElement("strong");
+  name.textContent = `${state.currency} · ${selected.label}`;
+  const hint = document.createElement("small");
+  hint.textContent = "Текущая валюта";
+  details.append(name, hint);
+  refs.currencyCurrent.append(symbol, details);
+
+  const query = refs.currencySearch.value.trim().toLocaleLowerCase("ru-RU");
+  refs.currencyChoices.replaceChildren();
+  Object.entries(CURRENCY_OPTIONS)
+    .filter(([code, currency]) => `${code} ${currency.label} ${currency.symbol}`.toLocaleLowerCase("ru-RU").includes(query))
+    .forEach(([code, currency]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "currency-choice";
+      button.dataset.currency = code;
+      button.setAttribute("aria-pressed", String(code === state.currency));
+      const choiceSymbol = document.createElement("span");
+      choiceSymbol.className = "currency-choice-symbol";
+      choiceSymbol.setAttribute("aria-hidden", "true");
+      choiceSymbol.textContent = currency.symbol;
+      const choiceDetails = document.createElement("span");
+      choiceDetails.className = "currency-choice-details";
+      const choiceCode = document.createElement("strong");
+      choiceCode.textContent = code;
+      const choiceName = document.createElement("small");
+      choiceName.textContent = currency.label;
+      choiceDetails.append(choiceCode, choiceName);
+      button.append(choiceSymbol, choiceDetails);
+      refs.currencyChoices.append(button);
+    });
+}
+
+function bindCurrencyPicker() {
+  if (currencyPickerBound) return;
+  currencyPickerBound = true;
+  refs.currencySearch.addEventListener("input", renderCurrencyPicker);
+  refs.currencyChoices.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-currency]");
+    if (!button || !CURRENCY_OPTIONS[button.dataset.currency]) return;
+    state.currency = button.dataset.currency;
+    saveSettings();
+    renderCurrencyPicker();
+    renderApp();
+  });
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = state.theme;
+  const button = document.getElementById("themeToggleBtn");
+  if (!button) return;
+  const light = state.theme === "light";
+  button.setAttribute("aria-pressed", String(light));
+  button.querySelector(".theme-toggle-icon").textContent = light ? "☀" : "☾";
+  button.querySelector(".theme-toggle-label").textContent = light ? "Светлая" : "Тёмная";
+}
+
+function applyLayoutMode() {
+  document.documentElement.dataset.layout = state.layoutMode;
+  document.querySelectorAll("[data-layout-mode]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.layoutMode === state.layoutMode));
+  });
 }
 
 function loadOperations() {
@@ -175,10 +301,38 @@ function renderCurrentAccount() {
       ? `${state.user.name} · ${formatPhoneInput(state.user.phone)}`
       : "";
   }
+  renderAvatar(refs.currentAvatar, state.user);
+  renderAvatar(refs.switcherAvatar, state.user);
+  renderAvatar(refs.brandAvatar, state.user);
+}
+
+function renderAvatar(element, user) {
+  if (!element) return;
+  const avatar = user?.avatar || "";
+  const firstLetter = Array.from(user?.name?.trim() || "")[0]?.toLocaleUpperCase("ru-RU") || "?";
+  element.textContent = avatar ? "" : firstLetter;
+  element.style.backgroundImage = avatar ? `url("${avatar}")` : "";
+  element.classList.toggle("has-avatar-image", Boolean(avatar));
+}
+
+function saveCurrentUserAvatar(dataUrl) {
+  if (!state.user) return;
+  const users = getUsers();
+  const userIndex = users.findIndex((user) => user.phone === state.user.phone);
+  if (userIndex < 0) return;
+  users[userIndex] = { ...users[userIndex], avatar: dataUrl };
+  saveUsers(users);
+  state.user = users[userIndex];
+  renderCurrentAccount();
+  renderSavedAccounts();
 }
 
 function getTodayISO() {
-  return new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function formatDateForInput(dateISO) {
@@ -251,6 +405,7 @@ function updateType(type) {
   });
 
   populateCategoryOptions(type);
+  renderOperationLimitHint();
 }
 
 function populateCategoryOptions(type) {
@@ -350,6 +505,7 @@ function validateDateField() {
 function validateForm() {
   clearFormErrors();
   refs.formNotice.hidden = true;
+  refs.formNotice.textContent = "";
 
   let isValid = true;
   const amountValue = String(refs.amountInput.value).trim();
@@ -361,6 +517,7 @@ function validateForm() {
     setFieldError("amount", "Введите корректную положительную сумму");
     isValid = false;
   } else if (state.currentType === "expense" && amount > getCurrentBalance() + 0.000001) {
+    refs.formNotice.textContent = "Недостаточно средств на балансе для этого расхода.";
     refs.formNotice.hidden = false;
     isValid = false;
   }
@@ -375,6 +532,20 @@ function validateForm() {
     isValid = false;
   }
 
+  if (state.currentType === "expense" && amountValue && Number.isFinite(amount) && amount > 0 && dateValue && state.spendingLimit.amount > 0) {
+    const usage = getSpendingUsage(dateValue);
+    if (amount > usage.remaining + 0.000001) {
+      const limitMessage = `Нельзя добавить расход: доступно по лимиту ${formatMoney(Math.max(0, usage.remaining))}.`;
+      refs.formNotice.textContent = refs.formNotice.textContent
+        ? `${refs.formNotice.textContent} ${limitMessage}`
+        : limitMessage;
+      refs.formNotice.hidden = false;
+      isValid = false;
+    }
+  }
+
+  renderOperationLimitHint();
+
   return isValid;
 }
 
@@ -383,6 +554,108 @@ function getCurrentBalance() {
     const amount = Number(operation.amount) || 0;
     return balance + (operation.type === "income" ? amount : -amount);
   }, 0);
+}
+
+const SPENDING_PERIOD_LABELS = {
+  week: "неделю",
+  month: "месяц",
+  "2months": "2 месяца",
+  "3months": "3 месяца",
+  year: "год"
+};
+
+function getSpendingPeriodRange(period, dateISO = getTodayISO()) {
+  const date = new Date(`${dateISO}T00:00:00Z`);
+  let start;
+  let end;
+  if (period === "week") {
+    start = new Date(date);
+    start.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
+    end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 7);
+  } else {
+    const months = period === "2months" ? 2 : period === "3months" ? 3 : period === "year" ? 12 : 1;
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const startMonth = Math.floor(month / months) * months;
+    start = new Date(Date.UTC(year, startMonth, 1));
+    end = new Date(Date.UTC(year, startMonth + months, 1));
+  }
+  const toISO = (value) => value.toISOString().slice(0, 10);
+  return { start: toISO(start), end: toISO(end) };
+}
+
+function getSpendingUsage(dateISO = getTodayISO()) {
+  const { amount, period } = state.spendingLimit;
+  if (!amount) return null;
+  const range = getSpendingPeriodRange(period, dateISO);
+  const spent = operations
+    .filter((operation) => operation.type === "expense" && operation.date >= range.start && operation.date < range.end)
+    .reduce((sum, operation) => sum + (Number(operation.amount) || 0), 0);
+  return { range, amount, spent, remaining: amount - spent };
+}
+
+function renderOperationLimitHint() {
+  if (!refs.operationLimitHint) return;
+  const active = state.currentType === "expense" && state.spendingLimit.amount > 0;
+  refs.operationLimitHint.hidden = !active;
+  refs.operationLimitHint.classList.remove("is-blocked");
+  if (!active) return;
+  const dateISO = parseDateInput(refs.dateInput.value);
+  if (!dateISO) {
+    refs.operationLimitHint.textContent = "Лимит будет рассчитан после выбора даты операции.";
+    return;
+  }
+  const usage = getSpendingUsage(dateISO);
+  const amount = Number(refs.amountInput.value) || 0;
+  if (amount > usage.remaining + 0.000001) {
+    refs.operationLimitHint.textContent = `Доступно ${formatMoney(Math.max(0, usage.remaining))}. Уменьшите сумму расхода.`;
+    refs.operationLimitHint.classList.add("is-blocked");
+  } else {
+    refs.operationLimitHint.textContent = `Доступно по лимиту: ${formatMoney(Math.max(0, usage.remaining))}${amount > 0 ? `. После операции останется ${formatMoney(Math.max(0, usage.remaining - amount))}` : ""}.`;
+  }
+}
+
+function renderSpendingLimit() {
+  const { amount, period } = state.spendingLimit;
+  refs.spendingLimitAmount.value = amount || "";
+  refs.spendingLimitPeriod.value = period;
+  if (!amount) {
+    refs.spendingLimitStatus.textContent = "Установите лимит, чтобы отслеживать расходы за период.";
+    refs.spendingLimitRemaining.textContent = "—";
+    refs.spendingLimitDays.textContent = "—";
+    refs.spendingLimitDaily.textContent = "—";
+    refs.spendingLimitSpent.textContent = "—";
+    refs.spendingLimitHint.textContent = "После установки лимита расходы сверх доступного остатка будут отклоняться.";
+    refs.spendingLimitProgress.style.width = "0%";
+    refs.spendingLimitProgress.classList.remove("is-over-limit");
+    refs.spendingLimitProgress.parentElement.setAttribute("aria-valuenow", "0");
+    refs.spendingLimitProgress.parentElement.classList.remove("is-over-limit");
+    renderOperationLimitHint();
+    return;
+  }
+  const { range, spent } = getSpendingUsage();
+  const remaining = amount - spent;
+  const percent = Math.max(0, Math.min((spent / amount) * 100, 100));
+  const lastDay = new Date(`${range.end}T00:00:00Z`);
+  lastDay.setUTCDate(lastDay.getUTCDate() - 1);
+  const today = new Date(`${getTodayISO()}T00:00:00Z`);
+  const daysLeft = Math.max(0, Math.ceil((lastDay.getTime() - today.getTime()) / 86400000) + 1);
+  const available = Math.max(0, remaining);
+  const daily = daysLeft > 0 ? available / daysLeft : available;
+  refs.spendingLimitStatus.textContent = `Текущий период: ${formatDateForInput(range.start)}–${formatDateForInput(lastDay.toISOString().slice(0, 10))} · ${SPENDING_PERIOD_LABELS[period]}.`;
+  refs.spendingLimitRemaining.textContent = formatMoney(available);
+  refs.spendingLimitDays.textContent = String(daysLeft);
+  refs.spendingLimitDaily.textContent = formatMoney(daily);
+  refs.spendingLimitSpent.textContent = formatMoney(spent);
+  refs.spendingLimitHint.textContent = remaining < 0
+    ? `Лимит превышен на ${formatMoney(-remaining)}. Новые расходы будут заблокированы.`
+    : `Остаток распределён на ${daysLeft} ${daysLeft === 1 ? "день" : daysLeft > 1 && daysLeft < 5 ? "дня" : "дней"}. Сумму можно потратить раньше, пока общий лимит не превышен.`;
+  refs.spendingLimitProgress.style.width = `${percent}%`;
+  refs.spendingLimitProgress.classList.toggle("is-over-limit", remaining < 0);
+  refs.spendingLimitProgress.parentElement.setAttribute("aria-valuenow", String(Math.round(percent)));
+  refs.spendingLimitProgress.parentElement.classList.toggle("is-over-limit", remaining < 0);
+  renderOperationLimitHint();
 }
 
 function calculateTotals() {
@@ -403,6 +676,7 @@ function calculateTotals() {
   renderAnalytics({ income, expense, balance });
   renderCategories();
   renderCurrentAccount();
+  renderSpendingLimit();
 
   return { income, expense, balance };
 }
@@ -886,8 +1160,10 @@ function enterAppAfterAuthentication(user) {
 }
 
 function returnToAuthentication(mode, addingAccount = false) {
+  bindAuthEvents();
   clearSessionUser();
   refs.appShell.hidden = true;
+  refs.authScreen.classList.remove("is-exiting");
   refs.authScreen.hidden = false;
   refs.authScreen.classList.toggle("add-account-mode", addingAccount);
   refs.authForm.reset();
@@ -908,11 +1184,44 @@ function openAccountSwitcher() {
 
   refs.switcherAccountName.textContent = state.user.name;
   refs.switcherAccountPhone.textContent = formatPhoneInput(state.user.phone);
+  renderSavedAccounts();
   refs.accountSwitcherDialog.hidden = false;
   refs.closeAccountSwitcherBtn.focus();
 }
 
+function renderSavedAccounts() {
+  const previousAccounts = getUsers().filter((user) => user.phone !== state.user?.phone);
+  refs.savedAccountsList.replaceChildren();
+  refs.noSavedAccounts.hidden = previousAccounts.length > 0;
+  previousAccounts.forEach((user) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "saved-account-button";
+    button.dataset.accountPhone = user.phone;
+    const avatar = document.createElement("span");
+    avatar.className = "saved-account-avatar";
+    avatar.setAttribute("aria-hidden", "true");
+    renderAvatar(avatar, user);
+    const details = document.createElement("span");
+    details.className = "saved-account-details";
+    const name = document.createElement("strong");
+    name.textContent = user.name;
+    const phone = document.createElement("small");
+    phone.textContent = formatPhoneInput(user.phone);
+    details.append(name, phone);
+    const arrow = document.createElement("span");
+    arrow.className = "saved-account-arrow";
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.textContent = "↗";
+    button.append(avatar, details, arrow);
+    refs.savedAccountsList.append(button);
+  });
+}
+
 function bindAuthEvents() {
+  if (authEventsBound) return;
+  authEventsBound = true;
+
   document.querySelectorAll(".password-visibility-toggle").forEach((button) => {
     button.addEventListener("click", () => {
       const input = document.getElementById(button.dataset.passwordTarget);
@@ -956,6 +1265,21 @@ function bindAuthEvents() {
 }
 
 function bindEvents() {
+  refs.spendingLimitForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const amount = Number(refs.spendingLimitAmount.value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      refs.spendingLimitAmount.setCustomValidity("Введите сумму больше нуля.");
+      refs.spendingLimitAmount.reportValidity();
+      return;
+    }
+    refs.spendingLimitAmount.setCustomValidity("");
+    state.spendingLimit = { amount, period: refs.spendingLimitPeriod.value };
+    saveSettings();
+    renderSpendingLimit();
+  });
+  refs.spendingLimitAmount.addEventListener("input", () => refs.spendingLimitAmount.setCustomValidity(""));
+
   refs.cancelDeleteOperationBtn.addEventListener("click", closeDeleteOperationDialog);
   refs.confirmDeleteOperationBtn.addEventListener("click", confirmDeleteOperation);
   refs.deleteOperationDialog.addEventListener("click", (event) => {
@@ -974,6 +1298,8 @@ function bindEvents() {
       updateType(button.dataset.type);
     });
   });
+
+  refs.amountInput.addEventListener("input", renderOperationLimitHint);
 
   refs.cancelFormBtn.addEventListener("click", () => {
     resetForm();
@@ -1015,6 +1341,7 @@ function bindEvents() {
         errorNode.textContent = "";
       }
       refs.dateInput.setAttribute("aria-invalid", "false");
+      renderOperationLimitHint();
       return;
     }
 
@@ -1027,10 +1354,12 @@ function bindEvents() {
       }
       refs.dateInput.setAttribute("aria-invalid", "false");
     }
+    renderOperationLimitHint();
   });
 
   refs.dateInput.addEventListener("blur", () => {
     validateDateField();
+    renderOperationLimitHint();
   });
 
   refs.form.addEventListener("submit", handleSubmit);
@@ -1044,10 +1373,18 @@ function bindEvents() {
     renderOperations();
   });
 
-  refs.currencySelect.addEventListener("change", () => {
-    state.currency = refs.currencySelect.value;
+  document.getElementById("themeToggleBtn").addEventListener("click", () => {
+    state.theme = state.theme === "dark" ? "light" : "dark";
     saveSettings();
-    renderApp();
+    applyTheme();
+  });
+
+  document.querySelectorAll("[data-layout-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.layoutMode = button.dataset.layoutMode;
+      saveSettings();
+      applyLayoutMode();
+    });
   });
 
   refs.clearOperationsBtn.addEventListener("click", () => {
@@ -1067,11 +1404,46 @@ function bindEvents() {
   });
 
   refs.logoutBtn.addEventListener("click", () => {
-    returnToAuthentication("login");
+    returnToAuthentication("register");
   });
 
   refs.switchAccountBtn.addEventListener("click", () => {
     openAccountSwitcher();
+  });
+
+  refs.avatarFileInput.addEventListener("change", () => {
+    const file = refs.avatarFileInput.files?.[0];
+    refs.avatarStatus.textContent = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      refs.avatarStatus.textContent = "Выберите файл изображения.";
+      refs.avatarFileInput.value = "";
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      refs.avatarStatus.textContent = "Размер изображения должен быть не больше 1 МБ.";
+      refs.avatarFileInput.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      if (typeof reader.result === "string") saveCurrentUserAvatar(reader.result);
+    });
+    reader.addEventListener("error", () => {
+      refs.avatarStatus.textContent = "Не удалось загрузить изображение. Попробуйте ещё раз.";
+    });
+    reader.readAsDataURL(file);
+  });
+
+  refs.savedAccountsList.addEventListener("click", (event) => {
+    const accountButton = event.target.closest("[data-account-phone]");
+    if (!accountButton) return;
+    const selectedUser = getUsers().find((user) => user.phone === accountButton.dataset.accountPhone);
+    if (!selectedUser) return;
+    refs.accountSwitcherDialog.hidden = true;
+    returnToAuthentication("login");
+    refs.authPhone.value = formatPhoneInput(selectedUser.phone);
+    refs.authPassword.focus();
   });
 
   refs.closeAccountSwitcherBtn.addEventListener("click", () => {
@@ -1104,9 +1476,12 @@ function bindEvents() {
 
 function init() {
   loadSettings();
+  applyTheme();
+  applyLayoutMode();
+  bindCurrencyPicker();
+  renderCurrencyPicker();
   loadOperations();
   refs.dateInput.value = formatDateForInput(getTodayISO());
-  refs.currencySelect.value = state.currency;
   updateType("income");
   populateFilterCategoryOptions();
   bindEvents();
@@ -1114,6 +1489,7 @@ function init() {
 }
 
 function initAuthFlow() {
+  bindAuthEvents();
   const savedSession = localStorage.getItem(SESSION_KEY);
   if (savedSession) {
     try {
@@ -1135,7 +1511,6 @@ function initAuthFlow() {
   refs.appShell.hidden = true;
   refs.authScreen.hidden = false;
   setAuthMode("register");
-  bindAuthEvents();
 }
 
 initAuthFlow();
