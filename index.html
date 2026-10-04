@@ -71,6 +71,7 @@
             <div>
               <p class="eyebrow">ТВОИ ФИНАНСЫ</p>
               <h2 id="homeHeading">Главная</h2>
+              <p class="home-owner-label">Работа Дмитрия</p>
             </div>
           </div>
 
@@ -126,6 +127,13 @@
                     <option value="">Выберите категорию</option>
                   </select>
                   <p class="field-error" data-error-for="category" aria-live="polite"></p>
+                </div>
+                <div id="operationBudgetField" class="field" hidden>
+                  <label for="operationBudgetSelect">Период бюджета</label>
+                  <select id="operationBudgetSelect" aria-label="Период бюджета">
+                    <option value="">Определить по дате операции</option>
+                  </select>
+                  <p class="field-hint">Выберите бюджет, к периоду которого отнести расход.</p>
                 </div>
                 <div class="field">
                   <label for="dateInput">Дата</label>

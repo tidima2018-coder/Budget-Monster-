@@ -84,6 +84,8 @@ const refs = {
   typeButtons: document.querySelectorAll(".type-option"),
   amountInput: document.getElementById("amountInput"),
   categorySelect: document.getElementById("categorySelect"),
+  operationBudgetField: document.getElementById("operationBudgetField"),
+  operationBudgetSelect: document.getElementById("operationBudgetSelect"),
   dateInput: document.getElementById("dateInput"),
   commentInput: document.getElementById("commentInput"),
   incomeSummary: document.getElementById("incomeSummary"),
@@ -350,11 +352,29 @@ function formatBudgetMoney(amount, code) {
   return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: currency.decimals }).format(value)} ${currency.symbol}`;
 }
 
+function normalizeBudgetDate(value) {
+  const text = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parsed = parseDateInput(text);
+  return parsed || "";
+}
+
+function sameBudgetCategory(left, right) {
+  return String(left || "").trim().toLocaleLowerCase("ru-RU")
+    === String(right || "").trim().toLocaleLowerCase("ru-RU");
+}
+
 function getBudgetCategorySpent(budget, category) {
+  const startDate = normalizeBudgetDate(budget.startDate);
+  const endDate = normalizeBudgetDate(budget.endDate);
+  if (!startDate || !endDate) return 0;
   return operations.reduce((sum, operation) => {
-    if (operation.type !== "expense" || operation.category !== category) return sum;
-    if (operation.date < budget.startDate || operation.date > budget.endDate) return sum;
-    return sum + (Number(operation.amount) || 0);
+    if (operation.budgetId && String(operation.budgetId) !== String(budget.id)) return sum;
+    const operationDate = normalizeBudgetDate(operation.date);
+    if (operation.type !== "expense" || !sameBudgetCategory(operation.category, category)) return sum;
+    if (!operationDate || operationDate < startDate || operationDate > endDate) return sum;
+    const amount = Number(operation.amount);
+    return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 }
 
@@ -447,9 +467,15 @@ function renderBudgetDetail(budget) {
   });
   const spent = categoryStats.reduce((sum, entry) => sum + entry.spent, 0);
   const percent = budget.amount > 0 ? spent / budget.amount * 100 : 0;
-  const budgetOperations = operations.filter((operation) => operation.type === "expense"
-    && operation.date >= budget.startDate && operation.date <= budget.endDate
-    && categoryStats.some((entry) => entry.name === operation.category));
+  const budgetOperations = operations.filter((operation) => {
+    const operationDate = normalizeBudgetDate(operation.date);
+    const startDate = normalizeBudgetDate(budget.startDate);
+    const endDate = normalizeBudgetDate(budget.endDate);
+    return operation.type === "expense"
+      && (!operation.budgetId || String(operation.budgetId) === String(budget.id))
+      && operationDate >= startDate && operationDate <= endDate
+      && categoryStats.some((entry) => sameBudgetCategory(entry.name, operation.category));
+  });
   const summary = document.createElement("div");
   summary.className = "category-budget-summary";
   const summaryValues = [
@@ -838,6 +864,7 @@ function parseDateInput(value) {
 
 function updateType(type) {
   state.currentType = type;
+  if (refs.operationBudgetField) refs.operationBudgetField.hidden = type !== "expense";
   refs.formNotice.hidden = true;
 
   refs.typeButtons.forEach((button) => {
@@ -974,11 +1001,45 @@ function validateForm() {
     isValid = false;
   }
 
+  const selectedBudget = refs.operationBudgetSelect?.value
+    ? categoryBudgets.find((budget) => String(budget.id) === refs.operationBudgetSelect.value)
+    : null;
+  if (state.currentType === "expense" && selectedBudget && dateValue) {
+    const startDate = normalizeBudgetDate(selectedBudget.startDate);
+    const endDate = normalizeBudgetDate(selectedBudget.endDate);
+    if (dateValue < startDate || dateValue > endDate) {
+      refs.formNotice.textContent = `Дата расхода должна попадать в период бюджета «${selectedBudget.name}» (${formatDateForInput(startDate)} — ${formatDateForInput(endDate)}).`;
+      refs.formNotice.hidden = false;
+      isValid = false;
+    }
+  }
+
   if (state.currentType === "expense" && amountValue && Number.isFinite(amount) && amount > 0 && dateValue && state.spendingLimit.amount > 0) {
     const usage = getSpendingUsage(dateValue);
     const daily = usage && getDailySpendingAllowance(usage, dateValue);
     if (daily && amount > daily.remaining + 0.000001) {
       refs.formNotice.textContent = "Вы превышаете дневную сумму.";
+      refs.formNotice.hidden = false;
+      isValid = false;
+    }
+  }
+
+  if (state.currentType === "expense" && amountValue && Number.isFinite(amount) && amount > 0 && categoryValue && dateValue) {
+    const budgetsToCheck = selectedBudget ? [selectedBudget] : categoryBudgets;
+    const overLimit = budgetsToCheck
+      .filter((budget) => normalizeBudgetDate(budget.startDate) <= dateValue
+        && normalizeBudgetDate(budget.endDate) >= dateValue)
+      .flatMap((budget) => {
+        const entry = (budget.categories || []).find((item) => sameBudgetCategory(item.name, categoryValue));
+        if (!entry) return [];
+        const exceededBy = getBudgetCategorySpent(budget, entry.name) + amount - Number(entry.amount || 0);
+        return exceededBy > 0.000001 ? [{ budget, exceededBy }] : [];
+      });
+
+    if (overLimit.length) {
+      refs.formNotice.textContent = overLimit
+        .map(({ budget, exceededBy }) => `Расход не добавлен: лимит категории «${categoryValue}» в бюджете «${budget.name}» будет превышен на ${formatBudgetMoney(exceededBy, budget.currency)}.`)
+        .join(" ");
       refs.formNotice.hidden = false;
       isValid = false;
     }
@@ -1096,28 +1157,57 @@ function getDailySpendingAllowance(usage, dateISO) {
 
 function renderOperationLimitHint() {
   if (!refs.operationLimitHint) return;
-  const active = state.currentType === "expense" && state.spendingLimit.amount > 0;
+  const isExpense = state.currentType === "expense";
+  const dateISO = parseDateInput(refs.dateInput.value);
+  const category = refs.categorySelect.value;
+  const amount = Number(refs.amountInput.value) || 0;
+  const selectedBudgetId = refs.operationBudgetSelect?.value;
+  const categoryBudgetsForOperation = isExpense && dateISO && category
+    ? categoryBudgets.filter((budget) => (!selectedBudgetId || String(budget.id) === selectedBudgetId)
+      && normalizeBudgetDate(budget.startDate) <= dateISO && normalizeBudgetDate(budget.endDate) >= dateISO
+      && (budget.categories || []).some((entry) => sameBudgetCategory(entry.name, category)))
+    : [];
+  const active = isExpense && (state.spendingLimit.amount > 0 || categoryBudgetsForOperation.length > 0);
   refs.operationLimitHint.hidden = !active;
   refs.operationLimitHint.classList.remove("is-blocked");
   if (!active) return;
-  const dateISO = parseDateInput(refs.dateInput.value);
+
+  const messages = [];
+  categoryBudgetsForOperation.forEach((budget) => {
+    const entry = budget.categories.find((item) => sameBudgetCategory(item.name, category));
+    const spentAfterOperation = getBudgetCategorySpent(budget, category) + amount;
+    const remaining = entry.amount - spentAfterOperation;
+    const percent = entry.amount > 0 ? spentAfterOperation / entry.amount * 100 : 0;
+    const status = remaining < 0
+      ? `после операции превышение ${formatBudgetMoney(Math.abs(remaining), budget.currency)}`
+      : `останется ${formatBudgetMoney(remaining, budget.currency)}`;
+    messages.push(`План «${budget.name}», ${category}: ${formatBudgetMoney(spentAfterOperation, budget.currency)} из ${formatBudgetMoney(entry.amount, budget.currency)} (${percent.toFixed(1)}%), ${status}.`);
+  });
+
+  if (state.spendingLimit.amount <= 0) {
+    refs.operationLimitHint.textContent = messages.join(" ");
+    return;
+  }
+
   if (!dateISO) {
-    refs.operationLimitHint.textContent = "Лимит будет рассчитан после выбора даты операции.";
+    messages.unshift("Лимит будет рассчитан после выбора даты операции.");
+    refs.operationLimitHint.textContent = messages.join(" ");
     return;
   }
   const usage = getSpendingUsage(dateISO);
-  const amount = Number(refs.amountInput.value) || 0;
   if (!usage) {
-    refs.operationLimitHint.textContent = `Лимит начнет действовать с ${formatDateForInput(state.spendingLimit.startDate)}. Эта операция указана раньше срока.`;
+    messages.unshift(`Лимит начнет действовать с ${formatDateForInput(state.spendingLimit.startDate)}. Эта операция указана раньше срока.`);
+    refs.operationLimitHint.textContent = messages.join(" ");
     return;
   }
   const daily = getDailySpendingAllowance(usage, dateISO);
   if (amount > daily.remaining + 0.000001) {
-    refs.operationLimitHint.textContent = "Вы превышаете дневную сумму.";
+    messages.unshift("Вы превышаете дневную сумму.");
     refs.operationLimitHint.classList.add("is-blocked");
   } else {
-    refs.operationLimitHint.textContent = `На этот день доступно ${formatMoney(daily.remaining)} из ${formatMoney(daily.cap)}${amount > 0 ? `. После операции останется ${formatMoney(Math.max(0, daily.remaining - amount))}` : ""}.`;
+    messages.unshift(`На этот день доступно ${formatMoney(daily.remaining)} из ${formatMoney(daily.cap)}${amount > 0 ? `. После операции останется ${formatMoney(Math.max(0, daily.remaining - amount))}` : ""}.`);
   }
+  refs.operationLimitHint.textContent = messages.join(" ");
 }
 
 function renderSpendingLimit() {
@@ -1433,6 +1523,7 @@ function showSection(sectionName) {
 
 function toggleForm(show) {
   if (show) {
+    populateOperationBudgetOptions();
     if (!refs.dialog.open) {
       refs.dialog.showModal();
     }
@@ -1442,12 +1533,32 @@ function toggleForm(show) {
   }
 }
 
+function populateOperationBudgetOptions() {
+  if (!refs.operationBudgetSelect) return;
+  const selectedBudgetId = refs.operationBudgetSelect.value;
+  refs.operationBudgetSelect.replaceChildren();
+  const automatic = document.createElement("option");
+  automatic.value = "";
+  automatic.textContent = "Определить по дате операции";
+  refs.operationBudgetSelect.append(automatic);
+  categoryBudgets.forEach((budget) => {
+    const option = document.createElement("option");
+    option.value = String(budget.id);
+    option.textContent = `${budget.name} · ${formatDateForInput(normalizeBudgetDate(budget.startDate))} — ${formatDateForInput(normalizeBudgetDate(budget.endDate))}`;
+    refs.operationBudgetSelect.append(option);
+  });
+  refs.operationBudgetSelect.value = categoryBudgets.some((budget) => String(budget.id) === selectedBudgetId)
+    ? selectedBudgetId
+    : "";
+}
+
 function clearForm() {
   refs.amountInput.value = "";
   refs.commentInput.value = "";
   refs.dateInput.value = formatDateForInput(getTodayISO());
   clearFormErrors();
   updateType("income");
+  if (refs.operationBudgetSelect) refs.operationBudgetSelect.value = "";
 }
 
 function resetForm() {
@@ -1473,6 +1584,8 @@ function handleSubmit(event) {
     date: parseDateInput(refs.dateInput.value),
     comment: refs.commentInput.value.trim()
   };
+  const selectedBudgetId = refs.operationBudgetSelect?.value;
+  if (state.currentType === "expense" && selectedBudgetId) newOperation.budgetId = selectedBudgetId;
 
   operations = [newOperation, ...operations];
   saveOperations();
@@ -1961,6 +2074,19 @@ function bindEvents() {
   });
 
   refs.amountInput.addEventListener("input", renderOperationLimitHint);
+  refs.categorySelect.addEventListener("change", renderOperationLimitHint);
+  refs.operationBudgetSelect.addEventListener("change", () => {
+    const budget = categoryBudgets.find((entry) => String(entry.id) === refs.operationBudgetSelect.value);
+    if (budget) {
+      const currentDate = parseDateInput(refs.dateInput.value);
+      const startDate = normalizeBudgetDate(budget.startDate);
+      const endDate = normalizeBudgetDate(budget.endDate);
+      if (!currentDate || currentDate < startDate || currentDate > endDate) {
+        refs.dateInput.value = formatDateForInput(startDate);
+      }
+    }
+    renderOperationLimitHint();
+  });
 
   refs.cancelFormBtn.addEventListener("click", () => {
     resetForm();
