@@ -273,6 +273,26 @@ h1 {
 .spending-limit-heading .spending-limit-status { margin: 0; }
 .spending-limit-form { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 10px; }
 .spending-limit-form .primary-button { grid-column: 1 / -1; min-height: 44px; white-space: nowrap; }
+.spending-limit-form .spending-limit-reset { grid-column: 1 / -1; min-height: 40px; }
+.spending-limit-form .spending-limit-reset {
+  width: auto;
+  justify-self: start;
+  min-height: 36px;
+  padding: 0 14px;
+  border-color: rgba(242, 107, 107, .22);
+  border-radius: 12px 5px 12px 5px;
+  background: rgba(242, 107, 107, .07);
+  color: var(--ink-soft);
+  font-size: .8rem;
+  transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+}
+.spending-limit-form .spending-limit-reset::before { content: "↻"; margin-right: 7px; font-size: 1rem; }
+.spending-limit-form .spending-limit-reset:hover {
+  transform: translateY(-1px);
+  border-color: rgba(242, 107, 107, .5);
+  background: rgba(242, 107, 107, .13);
+  color: var(--expense);
+}
 .spending-limit-form-note { grid-column: 1 / -1; margin: -4px 0 0; color: var(--ink-soft); font-size: .72rem; line-height: 1.4; }
 .spending-limit-error { grid-column: 1 / -1; margin: 0; padding: 9px 11px; border: 1px solid rgba(242, 107, 107, .3); border-radius: 10px 4px; color: var(--expense); background: rgba(242, 107, 107, .1); font-size: .82rem; font-weight: 700; line-height: 1.4; }
 .spending-limit-track { height: 12px; background: rgba(148, 163, 184, .18); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .12); }
@@ -391,6 +411,13 @@ h1 {
   animation: dialog-enter 0.2s ease-out;
 }
 
+.reset-confirm-icon {
+  border-color: rgba(123, 90, 247, .3);
+  background: linear-gradient(145deg, rgba(123, 90, 247, .22), rgba(83, 109, 255, .08));
+  color: #a894ff;
+  font-size: 2rem;
+}
+
 .delete-confirm-icon {
   display: grid;
   width: 56px;
@@ -450,6 +477,7 @@ h1 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  margin-top: 20px;
 }
 
 .danger-button {

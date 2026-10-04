@@ -61,6 +61,9 @@ const refs = {
   dialog: document.getElementById("operationDialog"),
   accountSwitcherDialog: document.getElementById("accountSwitcherDialog"),
   deleteOperationDialog: document.getElementById("deleteOperationDialog"),
+  resetAccountDialog: document.getElementById("resetAccountDialog"),
+  cancelResetAccountBtn: document.getElementById("cancelResetAccountBtn"),
+  confirmResetAccountBtn: document.getElementById("confirmResetAccountBtn"),
   deleteOperationCategory: document.getElementById("deleteOperationCategory"),
   deleteOperationAmount: document.getElementById("deleteOperationAmount"),
   cancelDeleteOperationBtn: document.getElementById("cancelDeleteOperationBtn"),
@@ -112,6 +115,7 @@ const refs = {
   switcherAvatar: document.getElementById("switcherAvatar"),
   brandAvatar: document.getElementById("brandAvatar"),
   spendingLimitForm: document.getElementById("spendingLimitForm"),
+  resetAccountDataBtn: document.getElementById("resetAccountDataBtn"),
   spendingLimitAmount: document.getElementById("spendingLimitAmount"),
   spendingDailyAmount: document.getElementById("spendingDailyAmount"),
   spendingLimitError: document.getElementById("spendingLimitError"),
@@ -158,9 +162,14 @@ function formatMoney(value) {
   return `${formatted.replace(/\u00a0/g, " ")} ${currency.symbol}`;
 }
 
+function accountStorageKey(key) {
+  const accountId = state.user?.phone || "guest";
+  return `${key}:${accountId}`;
+}
+
 function loadSettings() {
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
+    const raw = localStorage.getItem(accountStorageKey(SETTINGS_KEY));
     const parsed = raw ? JSON.parse(raw) : {};
     const candidate = parsed.currency || DEFAULT_CURRENCY;
     state.currency = CURRENCY_OPTIONS[candidate] ? candidate : DEFAULT_CURRENCY;
@@ -184,7 +193,7 @@ function loadSettings() {
 }
 
 function saveSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ currency: state.currency, theme: state.theme, layoutMode: state.layoutMode, spendingLimit: state.spendingLimit }));
+  localStorage.setItem(accountStorageKey(SETTINGS_KEY), JSON.stringify({ currency: state.currency, theme: state.theme, layoutMode: state.layoutMode, spendingLimit: state.spendingLimit }));
 }
 
 function renderCurrencyPicker() {
@@ -262,7 +271,7 @@ function applyLayoutMode() {
 
 function loadOperations() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(accountStorageKey(STORAGE_KEY));
     operations = raw ? JSON.parse(raw) : [];
   } catch (error) {
     operations = [];
@@ -274,7 +283,7 @@ function loadOperations() {
 }
 
 function saveOperations() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(operations));
+  localStorage.setItem(accountStorageKey(STORAGE_KEY), JSON.stringify(operations));
 }
 
 function getUsers() {
@@ -1358,6 +1367,39 @@ function bindAuthEvents() {
 }
 
 function bindEvents() {
+  refs.resetAccountDataBtn.addEventListener("click", () => {
+    refs.resetAccountDialog.hidden = false;
+    refs.cancelResetAccountBtn.focus();
+  });
+
+  function closeResetAccountDialog() {
+    refs.resetAccountDialog.hidden = true;
+    refs.resetAccountDataBtn.focus();
+  }
+
+  refs.cancelResetAccountBtn.addEventListener("click", closeResetAccountDialog);
+  refs.resetAccountDialog.addEventListener("click", (event) => {
+    if (event.target === refs.resetAccountDialog) closeResetAccountDialog();
+  });
+  refs.confirmResetAccountBtn.addEventListener("click", () => {
+    localStorage.removeItem(accountStorageKey(STORAGE_KEY));
+    localStorage.removeItem(accountStorageKey(SETTINGS_KEY));
+    operations = [];
+    state.currency = DEFAULT_CURRENCY;
+    state.theme = "dark";
+    state.layoutMode = "desktop";
+    state.spendingLimit = { amount: 0, dailyAmount: 0, period: "month", startDate: getTodayISO() };
+    applyTheme();
+    applyLayoutMode();
+    renderCurrencyPicker();
+    renderApp();
+    closeResetAccountDialog();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !refs.resetAccountDialog.hidden) closeResetAccountDialog();
+  });
+
   refs.spendingLimitForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const amount = Number(refs.spendingLimitAmount.value);

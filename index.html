@@ -204,7 +204,7 @@
                   <input id="spendingDailyAmount" type="number" min="0" step="any" inputmode="decimal" placeholder="Автоматически" />
                 </label>
                 <button class="primary-button" type="submit">Сохранить лимит</button>
-                <p class="spending-limit-form-note">Срок начнётся в день сохранения и будет автоматически продлеваться. Пустое поле дневного лимита рассчитает дневную сумму автоматически.</p>
+                <button class="secondary-button spending-limit-reset" id="resetAccountDataBtn" type="button">Сбросить</button>
                 <p id="spendingLimitError" class="spending-limit-error" role="alert" hidden></p>
               </form>
             </div>
@@ -462,6 +462,19 @@
         <div class="delete-confirm-actions">
           <button id="cancelDeleteOperationBtn" class="secondary-button" type="button">Оставить</button>
           <button id="confirmDeleteOperationBtn" class="danger-button" type="button">Удалить</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="resetAccountDialog" class="account-switcher-dialog delete-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="resetAccountHeading" aria-describedby="resetAccountDescription" hidden>
+      <section class="panel delete-confirm-panel">
+        <div class="delete-confirm-icon reset-confirm-icon" aria-hidden="true">↻</div>
+        <p class="eyebrow">СБРОС ДАННЫХ</p>
+        <h2 id="resetAccountHeading">Начать заново?</h2>
+        <p id="resetAccountDescription">Операции, лимит и настройки этого аккаунта будут удалены. Это действие нельзя отменить.</p>
+        <div class="delete-confirm-actions">
+          <button id="cancelResetAccountBtn" class="secondary-button" type="button">Отмена</button>
+          <button id="confirmResetAccountBtn" class="danger-button" type="button">Сбросить</button>
         </div>
       </section>
     </div>
