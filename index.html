@@ -198,7 +198,12 @@
                     <option value="year">Год</option>
                   </select>
                 </label>
+                <label class="field" for="spendingDailyAmount">
+                  <span>Лимит на день</span>
+                  <input id="spendingDailyAmount" type="number" min="0" step="any" inputmode="decimal" placeholder="Автоматически" />
+                </label>
                 <button class="primary-button" type="submit">Сохранить лимит</button>
+                <p class="spending-limit-form-note">Срок начнётся в день сохранения и будет автоматически продлеваться. Пустое поле дневного лимита рассчитает дневную сумму автоматически.</p>
               </form>
             </div>
             <div class="spending-limit-track" role="progressbar" aria-label="Использование лимита" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="spendingLimitProgress"></span></div>
@@ -216,7 +221,7 @@
               <article class="spending-limit-metric">
                 <span>Доступно в день</span>
                 <strong id="spendingLimitDaily">—</strong>
-                <small>если распределить остаток</small>
+                <small>доступно на выбранный день</small>
               </article>
               <article class="spending-limit-metric is-spent">
                 <span>Уже потрачено</span>

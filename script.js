@@ -111,6 +111,7 @@ const refs = {
   brandAvatar: document.getElementById("brandAvatar"),
   spendingLimitForm: document.getElementById("spendingLimitForm"),
   spendingLimitAmount: document.getElementById("spendingLimitAmount"),
+  spendingDailyAmount: document.getElementById("spendingDailyAmount"),
   spendingLimitPeriod: document.getElementById("spendingLimitPeriod"),
   spendingLimitStatus: document.getElementById("spendingLimitStatus"),
   spendingLimitProgress: document.getElementById("spendingLimitProgress"),
@@ -133,7 +134,7 @@ const state = {
   currency: DEFAULT_CURRENCY,
   theme: "dark",
   layoutMode: "desktop",
-  spendingLimit: { amount: 0, period: "month" },
+  spendingLimit: { amount: 0, dailyAmount: 0, period: "month" },
   user: null,
   authMode: "register"
 };
@@ -163,15 +164,19 @@ function loadSettings() {
     state.theme = parsed.theme === "light" ? "light" : "dark";
     state.layoutMode = parsed.layoutMode === "mobile" ? "mobile" : "desktop";
     const limit = parsed.spendingLimit || {};
+    const period = ["week", "month", "2months", "3months", "year"].includes(limit.period) ? limit.period : "month";
+    const legacyStart = getCalendarPeriodRange(period).start;
     state.spendingLimit = {
       amount: Number(limit.amount) > 0 ? Number(limit.amount) : 0,
-      period: ["week", "month", "2months", "3months", "year"].includes(limit.period) ? limit.period : "month"
+      dailyAmount: Number(limit.dailyAmount) > 0 ? Number(limit.dailyAmount) : 0,
+      period,
+      startDate: /^\d{4}-\d{2}-\d{2}$/.test(limit.startDate || "") ? limit.startDate : legacyStart
     };
   } catch (error) {
     state.currency = DEFAULT_CURRENCY;
     state.theme = "dark";
     state.layoutMode = "desktop";
-    state.spendingLimit = { amount: 0, period: "month" };
+    state.spendingLimit = { amount: 0, dailyAmount: 0, period: "month", startDate: getTodayISO() };
   }
 }
 
@@ -534,11 +539,9 @@ function validateForm() {
 
   if (state.currentType === "expense" && amountValue && Number.isFinite(amount) && amount > 0 && dateValue && state.spendingLimit.amount > 0) {
     const usage = getSpendingUsage(dateValue);
-    if (amount > usage.remaining + 0.000001) {
-      const limitMessage = `Нельзя добавить расход: доступно по лимиту ${formatMoney(Math.max(0, usage.remaining))}.`;
-      refs.formNotice.textContent = refs.formNotice.textContent
-        ? `${refs.formNotice.textContent} ${limitMessage}`
-        : limitMessage;
+    const daily = usage && getDailySpendingAllowance(usage, dateValue);
+    if (daily && amount > daily.remaining + 0.000001) {
+      refs.formNotice.textContent = "Вы превышаете дневную сумму.";
       refs.formNotice.hidden = false;
       isValid = false;
     }
@@ -564,7 +567,7 @@ const SPENDING_PERIOD_LABELS = {
   year: "год"
 };
 
-function getSpendingPeriodRange(period, dateISO = getTodayISO()) {
+function getCalendarPeriodRange(period, dateISO = getTodayISO()) {
   const date = new Date(`${dateISO}T00:00:00Z`);
   let start;
   let end;
@@ -585,14 +588,72 @@ function getSpendingPeriodRange(period, dateISO = getTodayISO()) {
   return { start: toISO(start), end: toISO(end) };
 }
 
+function addMonthsToAnchor(anchorISO, monthOffset) {
+  const [anchorYear, anchorMonth, anchorDay] = anchorISO.split("-").map(Number);
+  const absoluteMonth = anchorMonth - 1 + monthOffset;
+  const year = anchorYear + Math.floor(absoluteMonth / 12);
+  const month = ((absoluteMonth % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(anchorDay, lastDay))).toISOString().slice(0, 10);
+}
+
+function getSpendingPeriodRange(period, dateISO = getTodayISO()) {
+  const anchorISO = state.spendingLimit.startDate || getTodayISO();
+  if (dateISO < anchorISO) return null;
+
+  if (period === "week") {
+    const dayDifference = Math.floor((Date.parse(`${dateISO}T00:00:00Z`) - Date.parse(`${anchorISO}T00:00:00Z`)) / 86400000);
+    const cycle = Math.floor(dayDifference / 7);
+    const startDate = new Date(Date.parse(`${anchorISO}T00:00:00Z`) + cycle * 7 * 86400000).toISOString().slice(0, 10);
+    const endDate = new Date(Date.parse(`${startDate}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
+    return { start: startDate, end: endDate };
+  }
+
+  const monthsPerPeriod = period === "2months" ? 2 : period === "3months" ? 3 : period === "year" ? 12 : 1;
+  const [anchorYear, anchorMonth] = anchorISO.split("-").map(Number);
+  const [year, month] = dateISO.split("-").map(Number);
+  const monthDifference = (year - anchorYear) * 12 + month - anchorMonth;
+  let cycle = Math.max(0, Math.floor(monthDifference / monthsPerPeriod));
+  let start = addMonthsToAnchor(anchorISO, cycle * monthsPerPeriod);
+  if (dateISO < start && cycle > 0) {
+    cycle -= 1;
+    start = addMonthsToAnchor(anchorISO, cycle * monthsPerPeriod);
+  }
+  let end = addMonthsToAnchor(anchorISO, (cycle + 1) * monthsPerPeriod);
+  while (dateISO >= end) {
+    cycle += 1;
+    start = end;
+    end = addMonthsToAnchor(anchorISO, (cycle + 1) * monthsPerPeriod);
+  }
+  return { start, end };
+}
+
 function getSpendingUsage(dateISO = getTodayISO()) {
   const { amount, period } = state.spendingLimit;
   if (!amount) return null;
   const range = getSpendingPeriodRange(period, dateISO);
+  if (!range) return null;
   const spent = operations
     .filter((operation) => operation.type === "expense" && operation.date >= range.start && operation.date < range.end)
     .reduce((sum, operation) => sum + (Number(operation.amount) || 0), 0);
   return { range, amount, spent, remaining: amount - spent };
+}
+
+function getDailySpendingAllowance(usage, dateISO) {
+  if (!usage) return null;
+  const periodDays = Math.max(1, (Date.parse(`${usage.range.end}T00:00:00Z`) - Date.parse(`${usage.range.start}T00:00:00Z`)) / 86400000);
+  const dailyCap = state.spendingLimit.dailyAmount > 0
+    ? state.spendingLimit.dailyAmount
+    : usage.amount / periodDays;
+  const spentThatDay = operations
+    .filter((operation) => operation.type === "expense" && operation.date === dateISO
+      && operation.date >= usage.range.start && operation.date < usage.range.end)
+    .reduce((sum, operation) => sum + (Number(operation.amount) || 0), 0);
+  return {
+    cap: dailyCap,
+    spent: spentThatDay,
+    remaining: Math.max(0, Math.min(dailyCap - spentThatDay, usage.remaining))
+  };
 }
 
 function renderOperationLimitHint() {
@@ -608,17 +669,23 @@ function renderOperationLimitHint() {
   }
   const usage = getSpendingUsage(dateISO);
   const amount = Number(refs.amountInput.value) || 0;
-  if (amount > usage.remaining + 0.000001) {
-    refs.operationLimitHint.textContent = `Доступно ${formatMoney(Math.max(0, usage.remaining))}. Уменьшите сумму расхода.`;
+  if (!usage) {
+    refs.operationLimitHint.textContent = `Лимит начнет действовать с ${formatDateForInput(state.spendingLimit.startDate)}. Эта операция указана раньше срока.`;
+    return;
+  }
+  const daily = getDailySpendingAllowance(usage, dateISO);
+  if (amount > daily.remaining + 0.000001) {
+    refs.operationLimitHint.textContent = "Вы превышаете дневную сумму.";
     refs.operationLimitHint.classList.add("is-blocked");
   } else {
-    refs.operationLimitHint.textContent = `Доступно по лимиту: ${formatMoney(Math.max(0, usage.remaining))}${amount > 0 ? `. После операции останется ${formatMoney(Math.max(0, usage.remaining - amount))}` : ""}.`;
+    refs.operationLimitHint.textContent = `На этот день доступно ${formatMoney(daily.remaining)} из ${formatMoney(daily.cap)}${amount > 0 ? `. После операции останется ${formatMoney(Math.max(0, daily.remaining - amount))}` : ""}.`;
   }
 }
 
 function renderSpendingLimit() {
   const { amount, period } = state.spendingLimit;
   refs.spendingLimitAmount.value = amount || "";
+  refs.spendingDailyAmount.value = state.spendingLimit.dailyAmount || "";
   refs.spendingLimitPeriod.value = period;
   if (!amount) {
     refs.spendingLimitStatus.textContent = "Установите лимит, чтобы отслеживать расходы за период.";
@@ -626,7 +693,7 @@ function renderSpendingLimit() {
     refs.spendingLimitDays.textContent = "—";
     refs.spendingLimitDaily.textContent = "—";
     refs.spendingLimitSpent.textContent = "—";
-    refs.spendingLimitHint.textContent = "После установки лимита расходы сверх доступного остатка будут отклоняться.";
+    refs.spendingLimitHint.textContent = "После установки общего лимита расходы сверх дневного или общего остатка будут отклоняться.";
     refs.spendingLimitProgress.style.width = "0%";
     refs.spendingLimitProgress.classList.remove("is-over-limit");
     refs.spendingLimitProgress.parentElement.setAttribute("aria-valuenow", "0");
@@ -634,7 +701,9 @@ function renderSpendingLimit() {
     renderOperationLimitHint();
     return;
   }
-  const { range, spent } = getSpendingUsage();
+  const usage = getSpendingUsage();
+  if (!usage) return;
+  const { range, spent } = usage;
   const remaining = amount - spent;
   const percent = Math.max(0, Math.min((spent / amount) * 100, 100));
   const lastDay = new Date(`${range.end}T00:00:00Z`);
@@ -642,15 +711,15 @@ function renderSpendingLimit() {
   const today = new Date(`${getTodayISO()}T00:00:00Z`);
   const daysLeft = Math.max(0, Math.ceil((lastDay.getTime() - today.getTime()) / 86400000) + 1);
   const available = Math.max(0, remaining);
-  const daily = daysLeft > 0 ? available / daysLeft : available;
+  const dailyAllowance = getDailySpendingAllowance(usage, getTodayISO());
   refs.spendingLimitStatus.textContent = `Текущий период: ${formatDateForInput(range.start)}–${formatDateForInput(lastDay.toISOString().slice(0, 10))} · ${SPENDING_PERIOD_LABELS[period]}.`;
   refs.spendingLimitRemaining.textContent = formatMoney(available);
   refs.spendingLimitDays.textContent = String(daysLeft);
-  refs.spendingLimitDaily.textContent = formatMoney(daily);
+  refs.spendingLimitDaily.textContent = formatMoney(dailyAllowance.remaining);
   refs.spendingLimitSpent.textContent = formatMoney(spent);
   refs.spendingLimitHint.textContent = remaining < 0
     ? `Лимит превышен на ${formatMoney(-remaining)}. Новые расходы будут заблокированы.`
-    : `Остаток распределён на ${daysLeft} ${daysLeft === 1 ? "день" : daysLeft > 1 && daysLeft < 5 ? "дня" : "дней"}. Сумму можно потратить раньше, пока общий лимит не превышен.`;
+    : `Равномерный дневной лимит — ${formatMoney(dailyAllowance.cap)}. На сегодня осталось ${formatMoney(dailyAllowance.remaining)}; неиспользованная дневная сумма не переносится.`;
   refs.spendingLimitProgress.style.width = `${percent}%`;
   refs.spendingLimitProgress.classList.toggle("is-over-limit", remaining < 0);
   refs.spendingLimitProgress.parentElement.setAttribute("aria-valuenow", String(Math.round(percent)));
@@ -1268,17 +1337,31 @@ function bindEvents() {
   refs.spendingLimitForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const amount = Number(refs.spendingLimitAmount.value);
+    const dailyAmountText = refs.spendingDailyAmount.value.trim();
+    const dailyAmount = Number(dailyAmountText);
     if (!Number.isFinite(amount) || amount <= 0) {
       refs.spendingLimitAmount.setCustomValidity("Введите сумму больше нуля.");
       refs.spendingLimitAmount.reportValidity();
       return;
     }
+    if (dailyAmountText && (!Number.isFinite(dailyAmount) || dailyAmount <= 0)) {
+      refs.spendingDailyAmount.setCustomValidity("Введите дневной лимит больше нуля или оставьте поле пустым.");
+      refs.spendingDailyAmount.reportValidity();
+      return;
+    }
     refs.spendingLimitAmount.setCustomValidity("");
-    state.spendingLimit = { amount, period: refs.spendingLimitPeriod.value };
+    refs.spendingDailyAmount.setCustomValidity("");
+    state.spendingLimit = {
+      amount,
+      dailyAmount: dailyAmountText ? dailyAmount : 0,
+      period: refs.spendingLimitPeriod.value,
+      startDate: getTodayISO()
+    };
     saveSettings();
     renderSpendingLimit();
   });
   refs.spendingLimitAmount.addEventListener("input", () => refs.spendingLimitAmount.setCustomValidity(""));
+  refs.spendingDailyAmount.addEventListener("input", () => refs.spendingDailyAmount.setCustomValidity(""));
 
   refs.cancelDeleteOperationBtn.addEventListener("click", closeDeleteOperationDialog);
   refs.confirmDeleteOperationBtn.addEventListener("click", confirmDeleteOperation);
