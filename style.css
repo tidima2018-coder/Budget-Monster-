@@ -1902,3 +1902,131 @@ h1 {
 @media (max-width: 620px) {
   .avatar-setting-control { align-self: flex-start; flex-wrap: wrap; }
 }
+
+/* Light theme refresh. All changes below apply only while the light theme is active. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: linear-gradient(145deg, #f5f3ff 0%, #f6f8ff 48%, #eff8f5 100%);
+  --bg-strong: #ffffff;
+  --bg-soft: #f4f3fb;
+  --panel: #ffffff;
+  --panel-strong: #ffffff;
+  --panel-muted: #f7f6fc;
+  --line: rgba(78, 68, 120, .13);
+  --ink: #28243b;
+  --ink-soft: #716d82;
+  --income: #168365;
+  --income-soft: rgba(22, 131, 101, .1);
+  --expense: #c94e61;
+  --expense-soft: rgba(201, 78, 97, .1);
+  --action: #6b50d8;
+  --action-dark: #523bb8;
+  --shadow: 0 18px 44px rgba(47, 42, 89, .1);
+}
+
+:root[data-theme="light"] body { color-scheme: light; }
+:root[data-theme="light"] body::before { background: rgba(139, 112, 239, .17); }
+:root[data-theme="light"] body::after { background: rgba(87, 174, 157, .12); }
+:root[data-theme="light"] .topbar {
+  border-color: rgba(78, 68, 120, .12);
+  background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(249,248,255,.94));
+  box-shadow: 0 12px 34px rgba(47, 42, 89, .09);
+}
+:root[data-theme="light"] .panel {
+  border-color: var(--line);
+  background: var(--panel);
+  box-shadow: 0 14px 36px rgba(47, 42, 89, .08);
+}
+:root[data-theme="light"] .nav-button,
+:root[data-theme="light"] .mobile-nav-button:not(.is-active) {
+  border-color: rgba(78, 68, 120, .12);
+  background: rgba(255,255,255,.78);
+  color: var(--ink-soft);
+}
+:root[data-theme="light"] .nav-button.is-active,
+:root[data-theme="light"] .mobile-nav-button.is-active,
+:root[data-theme="light"] .type-option.is-active,
+:root[data-theme="light"] .auth-tab.is-active {
+  background: linear-gradient(135deg, #755ce2, #6382e9);
+  box-shadow: 0 8px 18px rgba(103, 82, 204, .2);
+}
+:root[data-theme="light"] .mobile-nav {
+  border-color: rgba(78, 68, 120, .14);
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 12px 34px rgba(47, 42, 89, .16);
+}
+:root[data-theme="light"] .field input,
+:root[data-theme="light"] .field select,
+:root[data-theme="light"] .field textarea,
+:root[data-theme="light"] .auth-field input,
+:root[data-theme="light"] .spending-limit-form input,
+:root[data-theme="light"] .spending-limit-form select,
+:root[data-theme="light"] .category-budget-fields input,
+:root[data-theme="light"] .category-budget-fields select,
+:root[data-theme="light"] .category-budget-editor-row input[type="number"] {
+  border-color: rgba(78, 68, 120, .16);
+  background-color: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgba(47, 42, 89, .035);
+}
+:root[data-theme="light"] .field select,
+:root[data-theme="light"] .currency-select-wrap select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(83, 73, 126, .8) 50%),
+    linear-gradient(135deg, rgba(83, 73, 126, .8) 50%, transparent 50%);
+}
+:root[data-theme="light"] .type-switch,
+:root[data-theme="light"] .auth-tabs {
+  border-color: rgba(78, 68, 120, .12);
+  background: #f0eef8;
+  box-shadow: inset 0 1px 2px rgba(47, 42, 89, .04);
+}
+:root[data-theme="light"] .type-option:not(.is-active),
+:root[data-theme="light"] .auth-tab:not(.is-active) { color: var(--ink-soft); }
+:root[data-theme="light"] .operation-item {
+  border-color: var(--line);
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(47, 42, 89, .055);
+}
+:root[data-theme="light"] .operation-item.income {
+  border-color: rgba(22, 131, 101, .16);
+  background: linear-gradient(110deg, rgba(22, 131, 101, .07), #fff 72%);
+}
+:root[data-theme="light"] .operation-item.expense {
+  border-color: rgba(201, 78, 97, .15);
+  background: linear-gradient(110deg, rgba(201, 78, 97, .055), #fff 72%);
+}
+:root[data-theme="light"] .empty-state { border-color: rgba(78, 68, 120, .18); background: #f8f7fc; }
+:root[data-theme="light"] .category-card {
+  border-color: var(--line);
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(47, 42, 89, .06);
+}
+:root[data-theme="light"] .account-switcher-current {
+  border-color: rgba(107, 80, 216, .18);
+  background: linear-gradient(135deg, #f0edff, #f8faff);
+}
+:root[data-theme="light"] .dialog-close,
+:root[data-theme="light"] .delete-operation-preview {
+  border-color: var(--line);
+  background: #f6f5fb;
+  color: var(--ink-soft);
+}
+:root[data-theme="light"] .auth-card { border-color: var(--line); background: rgba(255,255,255,.96); }
+:root[data-theme="light"] .account-action-button { border-color: var(--line); background: #f1eff9; color: var(--ink); box-shadow: none; }
+:root[data-theme="light"] .account-action-button:hover { background: #e9e5fb; }
+:root[data-theme="light"] .setting-danger { border-color: rgba(201, 78, 97, .16); background: linear-gradient(135deg, #fff5f6, #fff); }
+:root[data-theme="light"] .setting-row > strong { border-color: rgba(107, 80, 216, .16); background: rgba(107, 80, 216, .09); color: #654dcc; }
+:root[data-theme="light"] .category-budget-panel,
+:root[data-theme="light"] .spending-limit-panel {
+  background: radial-gradient(circle at 100% 0%, rgba(107, 80, 216, .07), transparent 34%), var(--panel);
+}
+:root[data-theme="light"] .spending-limit-metric.is-remaining { border-color: rgba(22, 131, 101, .2); }
+:root[data-theme="light"] .category-budget-insights { border-color: rgba(107, 80, 216, .14); background: linear-gradient(140deg, #f4f1ff, #fff 78%); }
+:root[data-theme="light"] .category-budget-insight-note.is-alert { color: #9a6214; background: #fff5df; }
+:root[data-theme="light"] .category-budget-insight-note.is-critical { color: #b33f52; background: #fff0f2; }
+:root[data-theme="light"] .currency-current,
+:root[data-theme="light"] .currency-choice,
+:root[data-theme="light"] .currency-search { border-color: var(--line); background: #fff; }
+:root[data-theme="light"] .currency-choice[aria-pressed="true"] { border-color: #765dde; background: #f1edff; }
+:root[data-theme="light"] .category-budget-currency-picker { background: linear-gradient(145deg, #f3f0ff, #fff); }

@@ -510,8 +510,8 @@ function renderBudgetDetail(budget) {
     const approaching = nearLimitCategories.filter((entry) => entry.percent >= 70 && entry.percent <= 100);
     insightNote.classList.toggle("is-critical", exceeded.length > 0);
     const parts = [];
-    if (exceeded.length) parts.push(`Превышен лимит: ${exceeded.map((entry) => `${entry.name} на ${formatBudgetMoney(Math.abs(entry.remaining), budget.currency)}`).join(", `)}.`);
-    if (approaching.length) parts.push(`Близко к лимиту: ${approaching.map((entry) => `${entry.name} (${entry.percent.toFixed(0)}%)`).join(", `)}.`);
+    if (exceeded.length) parts.push(`Превышен лимит: ${exceeded.map((entry) => `${entry.name} на ${formatBudgetMoney(Math.abs(entry.remaining), budget.currency)}`).join(", ")}.`);
+    if (approaching.length) parts.push(`Близко к лимиту: ${approaching.map((entry) => `${entry.name} (${entry.percent.toFixed(0)}%)`).join(", ")}.`);
     insightNote.textContent = parts.join(" ");
   } else {
     const top = [...categoryStats].sort((a, b) => b.spent - a.spent)[0];
@@ -709,18 +709,31 @@ function getUsers() {
 }
 
 function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  try {
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
 
 function setSessionUser(user) {
   state.user = user;
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ phone: user.phone, name: user.name }));
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ phone: user.phone, name: user.name }));
+  } catch (error) {
+    // Keep the current login working if this browser cannot persist the session.
+  }
   renderCurrentAccount();
 }
 
 function clearSessionUser() {
   state.user = null;
-  localStorage.removeItem(SESSION_KEY);
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch (error) {
+    // The authentication screen can still be shown if storage is unavailable.
+  }
   renderCurrentAccount();
 }
 
@@ -1490,7 +1503,10 @@ function getPhoneDigits(value) {
   const text = String(value || "").trim();
   let digits = text.replace(/\D/g, "");
 
-  if (text.startsWith("+7") || (digits.length > 10 && digits.startsWith("7"))) {
+  if (text.startsWith("+7")) {
+    digits = digits.slice(1);
+    if (digits.length > 10 && digits.startsWith("7")) digits = digits.slice(1);
+  } else if (digits.length > 10 && digits.startsWith("7")) {
     digits = digits.slice(1);
   }
 
@@ -1502,7 +1518,10 @@ function formatPhoneInput(value) {
   const text = String(value || "").trim();
   let digits = text.replace(/\D/g, "");
 
-  if (text.startsWith("+7") || (digits.length > 10 && digits.startsWith("7"))) {
+  if (text.startsWith("+7")) {
+    digits = digits.slice(1);
+    if (digits.length > 10 && digits.startsWith("7")) digits = digits.slice(1);
+  } else if (digits.length > 10 && digits.startsWith("7")) {
     digits = digits.slice(1);
   }
 
@@ -1623,7 +1642,7 @@ function handleAuthSubmit(event) {
   const password = refs.authPassword.value.trim();
 
   if (state.authMode === "register") {
-    const existingUser = users.find((user) => user.phone === phone);
+    const existingUser = users.find((user) => getPhoneDigits(user.phone) === phone);
     if (existingUser) {
       refs.authError.textContent = "Пользователь с таким номером уже существует.";
       return;
@@ -1637,20 +1656,32 @@ function handleAuthSubmit(event) {
     };
 
     users.push(newUser);
-    saveUsers(users);
+    if (!saveUsers(users)) {
+      refs.authError.textContent = "Не удалось сохранить аккаунт в этом браузере. Проверьте настройки хранения данных и попробуйте снова.";
+      return;
+    }
     enterAppAfterAuthentication(newUser);
     return;
   }
 
-  if (state.authMode === "login" && !users.some((item) => item.phone === phone)) {
+  if (state.authMode === "login" && !users.some((item) => getPhoneDigits(item.phone) === phone)) {
     refs.authError.textContent = "Аккаунт с таким номером не найден. Зарегистрируйтесь.";
     return;
   }
 
-  const user = users.find((item) => item.phone === phone && item.password === password);
+  let user = users.find((item) => getPhoneDigits(item.phone) === phone && item.password === password);
   if (!user) {
     refs.authError.textContent = "Неверный номер или пароль.";
     return;
+  }
+
+  if (user.phone !== phone) {
+    user = { ...user, phone };
+    const migratedUsers = users.map((item) => item.id === user.id ? user : item);
+    if (!saveUsers(migratedUsers)) {
+      refs.authError.textContent = "Не удалось обновить номер аккаунта в хранилище браузера. Проверьте настройки хранения данных и попробуйте снова.";
+      return;
+    }
   }
 
   enterAppAfterAuthentication(user);
@@ -2121,12 +2152,12 @@ function init() {
 
 function initAuthFlow() {
   bindAuthEvents();
-  const savedSession = localStorage.getItem(SESSION_KEY);
-  if (savedSession) {
-    try {
+  try {
+    const savedSession = localStorage.getItem(SESSION_KEY);
+    if (savedSession) {
       const session = JSON.parse(savedSession);
       const users = getUsers();
-      const user = users.find((item) => item.phone === session.phone && item.name === session.name);
+      const user = users.find((item) => getPhoneDigits(item.phone) === getPhoneDigits(session.phone) && item.name === session.name);
       if (user) {
         state.user = user;
         refs.authScreen.hidden = true;
@@ -2134,9 +2165,9 @@ function initAuthFlow() {
         init();
         return;
       }
-    } catch (error) {
-      clearSessionUser();
     }
+  } catch (error) {
+    clearSessionUser();
   }
 
   refs.appShell.hidden = true;
