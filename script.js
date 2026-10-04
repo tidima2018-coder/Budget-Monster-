@@ -134,7 +134,6 @@ const refs = {
   budgetFormTitle: document.getElementById("categoryBudgetFormTitle"),
   budgetFormCancel: document.getElementById("categoryBudgetCancel"),
   budgetFormOpen: document.getElementById("categoryBudgetNew"),
-  budgetAutoDistribute: document.getElementById("categoryBudgetAuto"),
   budgetDetail: document.getElementById("categoryBudgetDetail"),
   budgetDetailContent: document.getElementById("categoryBudgetDetailContent"),
   budgetDetailTitle: document.getElementById("categoryBudgetDetailTitle"),
@@ -437,8 +436,20 @@ function renderBudgetDetail(budget) {
   refs.budgetDetailTitle.textContent = budget.name;
   refs.budgetDetailDates.textContent = `${formatDateForInput(budget.startDate)} — ${formatDateForInput(budget.endDate)}`;
   refs.budgetDetailContent.replaceChildren();
-  const spent = getBudgetSpent(budget);
+  const categoryStats = (budget.categories || []).map((entry) => {
+    const categorySpent = getBudgetCategorySpent(budget, entry.name);
+    return {
+      ...entry,
+      spent: categorySpent,
+      remaining: entry.amount - categorySpent,
+      percent: entry.amount > 0 ? categorySpent / entry.amount * 100 : 0
+    };
+  });
+  const spent = categoryStats.reduce((sum, entry) => sum + entry.spent, 0);
   const percent = budget.amount > 0 ? spent / budget.amount * 100 : 0;
+  const budgetOperations = operations.filter((operation) => operation.type === "expense"
+    && operation.date >= budget.startDate && operation.date <= budget.endDate
+    && categoryStats.some((entry) => entry.name === operation.category));
   const summary = document.createElement("div");
   summary.className = "category-budget-summary";
   const summaryValues = [
@@ -465,13 +476,58 @@ function renderBudgetDetail(budget) {
   overall.append(overallLabel);
   refs.budgetDetailContent.append(overall);
 
+  const insights = document.createElement("section");
+  insights.className = "category-budget-insights";
+  const insightsTitle = document.createElement("h4");
+  insightsTitle.textContent = "Аналитика расходов";
+  insights.append(insightsTitle);
+  const insightGrid = document.createElement("div");
+  insightGrid.className = "category-budget-insight-grid";
+  const biggestCategory = [...categoryStats].sort((a, b) => b.spent - a.spent)[0];
+  const nearLimitCategories = categoryStats.filter((entry) => entry.percent >= 70);
+  const analytics = [
+    ["Расходных операций", String(budgetOperations.length)],
+    ["Средний расход", formatBudgetMoney(budgetOperations.length ? spent / budgetOperations.length : 0, budget.currency)],
+    ["Самая затратная категория", biggestCategory && biggestCategory.spent > 0 ? `${getCategoryIcon(biggestCategory.name)} ${biggestCategory.name} · ${formatBudgetMoney(biggestCategory.spent, budget.currency)}` : "Пока нет расходов"]
+  ];
+  analytics.forEach(([label, value]) => {
+    const card = document.createElement("div");
+    card.className = "category-budget-insight-card";
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    const result = document.createElement("strong");
+    result.textContent = value;
+    card.append(caption, result);
+    insightGrid.append(card);
+  });
+  insights.append(insightGrid);
+  const insightNote = document.createElement("p");
+  insightNote.className = nearLimitCategories.length ? "category-budget-insight-note is-alert" : "category-budget-insight-note";
+  if (!budgetOperations.length) {
+    insightNote.textContent = "За выбранный период пока нет расходов в категориях этого бюджета.";
+  } else if (nearLimitCategories.length) {
+    const exceeded = nearLimitCategories.filter((entry) => entry.percent > 100);
+    const approaching = nearLimitCategories.filter((entry) => entry.percent >= 70 && entry.percent <= 100);
+    insightNote.classList.toggle("is-critical", exceeded.length > 0);
+    const parts = [];
+    if (exceeded.length) parts.push(`Превышен лимит: ${exceeded.map((entry) => `${entry.name} на ${formatBudgetMoney(Math.abs(entry.remaining), budget.currency)}`).join(", `)}.`);
+    if (approaching.length) parts.push(`Близко к лимиту: ${approaching.map((entry) => `${entry.name} (${entry.percent.toFixed(0)}%)`).join(", `)}.`);
+    insightNote.textContent = parts.join(" ");
+  } else {
+    const top = [...categoryStats].sort((a, b) => b.spent - a.spent)[0];
+    const share = spent > 0 ? top.spent / spent * 100 : 0;
+    insightNote.textContent = `${top.name} — наибольшая статья расходов: ${formatBudgetMoney(top.spent, budget.currency)} (${share.toFixed(1)}% расходов бюджета). Все категории ниже 70% своих лимитов.`;
+  }
+  insights.append(insightNote);
+  refs.budgetDetailContent.append(insights);
+
   const list = document.createElement("div");
   list.className = "category-budget-breakdown";
-  [...(budget.categories || [])]
-    .sort((a, b) => getBudgetCategorySpent(budget, b.name) - getBudgetCategorySpent(budget, a.name))
+  categoryStats
+    .sort((a, b) => b.spent - a.spent)
     .forEach((entry) => {
-    const categorySpent = getBudgetCategorySpent(budget, entry.name);
-    const categoryPercent = entry.amount > 0 ? categorySpent / entry.amount * 100 : 0;
+    const categorySpent = entry.spent;
+    const categoryPercent = entry.percent;
     const row = document.createElement("article");
     row.className = `category-budget-breakdown-item is-${getBudgetTone(categoryPercent)}`;
     const head = document.createElement("div");
@@ -481,11 +537,12 @@ function renderBudgetDetail(budget) {
     const amounts = document.createElement("strong");
     amounts.textContent = `${formatBudgetMoney(categorySpent, budget.currency)} / ${formatBudgetMoney(entry.amount, budget.currency)}`;
     head.append(categoryName, amounts);
-    const remaining = entry.amount - categorySpent;
     const caption = document.createElement("p");
-    caption.textContent = remaining < 0
-      ? `Лимит превышен на ${formatBudgetMoney(Math.abs(remaining), budget.currency)}`
-      : `Осталось: ${formatBudgetMoney(remaining, budget.currency)} · ${categoryPercent.toFixed(1)}%`;
+    const categoryShare = spent > 0 ? categorySpent / spent * 100 : 0;
+    const remainderText = entry.remaining < 0
+      ? `Лимит превышен на ${formatBudgetMoney(Math.abs(entry.remaining), budget.currency)}`
+      : `Осталось: ${formatBudgetMoney(entry.remaining, budget.currency)}`;
+    caption.textContent = `${remainderText} · ${categoryPercent.toFixed(1)}% лимита · ${categoryShare.toFixed(1)}% расходов`;
     row.append(head, caption, makeBudgetProgress(categoryPercent, `${entry.name}: использовано ${categoryPercent.toFixed(1)}%`));
     list.append(row);
     });
@@ -503,10 +560,6 @@ function setBudgetEditorCurrency(nextCurrency) {
   const nextRate = CURRENCY_OPTIONS[nextCurrency].rate;
   const factor = previousRate / nextRate;
   refs.budgetAmount.value = refs.budgetAmount.value ? String(Number(refs.budgetAmount.value) * factor) : "";
-  refs.budgetCategories.querySelectorAll("[data-budget-amount]").forEach((input) => {
-    if (input.value) input.value = String(Number(input.value) * factor);
-    input.placeholder = `Лимит ${currencyLabel(nextCurrency)}`;
-  });
   budgetEditorCurrency = nextCurrency;
   refs.budgetCurrency.value = nextCurrency;
   refs.budgetCurrencySymbol.textContent = currencyLabel(nextCurrency);
@@ -529,15 +582,6 @@ function renderBudgetCategoryFields(budget = null) {
     const label = document.createElement("span");
     label.className = "category-budget-editor-name";
     label.textContent = `${getCategoryIcon(name)} ${name}`;
-    const amount = document.createElement("input");
-    amount.type = "number";
-    amount.min = "0";
-    amount.step = "any";
-    amount.placeholder = `Лимит ${currencyLabel(refs.budgetCurrency.value || DEFAULT_CURRENCY)}`;
-    amount.dataset.budgetAmount = name;
-    amount.value = entry ? String(entry.amount / (CURRENCY_OPTIONS[budget.currency]?.rate || 1)) : "";
-    amount.disabled = !entry;
-    amount.setAttribute("aria-label", `Лимит категории ${name}`);
     const percent = document.createElement("input");
     percent.type = "number";
     percent.min = "0";
@@ -548,15 +592,17 @@ function renderBudgetCategoryFields(budget = null) {
     percent.value = entry && budget.amount > 0 ? String((entry.amount / budget.amount * 100).toFixed(2)) : "";
     percent.disabled = !entry;
     percent.setAttribute("aria-label", `Процент для категории ${name}`);
+    const computed = document.createElement("span");
+    computed.className = "category-budget-computed";
+    computed.dataset.budgetComputed = name;
+    computed.textContent = "Лимит: —";
     check.addEventListener("change", () => {
-      amount.disabled = !check.checked;
       percent.disabled = !check.checked;
-      if (!check.checked) { amount.value = ""; percent.value = ""; }
+      if (!check.checked) percent.value = "";
       updateBudgetAllocation();
     });
-    amount.addEventListener("input", updateBudgetAllocation);
-    percent.addEventListener("input", () => { amount.dataset.manual = "true"; });
-    row.append(check, label, amount, percent);
+    percent.addEventListener("input", updateBudgetAllocation);
+    row.append(check, label, percent, computed);
     refs.budgetCategories.append(row);
   });
   updateBudgetAllocation();
@@ -566,12 +612,21 @@ function updateBudgetAllocation() {
   if (!refs.budgetAmount) return;
   const currencyCode = refs.budgetCurrency.value || DEFAULT_CURRENCY;
   const rate = CURRENCY_OPTIONS[currencyCode]?.rate || 1;
-  const allocated = [...refs.budgetCategories.querySelectorAll("[data-budget-amount]")]
-    .filter((input) => !input.disabled && input.value !== "")
-    .reduce((sum, input) => sum + (Number(input.value) || 0), 0);
   const total = Number(refs.budgetAmount.value) || 0;
-  refs.budgetAllocated.textContent = `Распределено: ${formatBudgetMoney(allocated * rate, currencyCode)} из ${formatBudgetMoney(total * rate, currencyCode)}`;
-  refs.budgetAllocated.classList.toggle("is-over", allocated > total + 0.000001);
+  const percentages = [...refs.budgetCategories.querySelectorAll("[data-budget-percent]")]
+    .filter((input) => !input.disabled && input.value !== "")
+    .map((input) => Number(input.value));
+  const percentageTotal = percentages.reduce((sum, value) => sum + (Number.isFinite(value) && value > 0 ? value : 0), 0);
+  [...refs.budgetCategories.querySelectorAll("[data-budget-computed]")].forEach((display) => {
+    const percentInput = [...refs.budgetCategories.querySelectorAll("[data-budget-percent]")]
+      .find((input) => input.dataset.budgetPercent === display.dataset.budgetComputed);
+    if (percentInput.disabled) display.textContent = "Лимит: —";
+    else if (percentInput.value === "" || !Number.isFinite(Number(percentInput.value)) || Number(percentInput.value) < 0) display.textContent = "Лимит: укажите %";
+    else display.textContent = `Лимит: ${formatBudgetMoney(total * Number(percentInput.value) / 100 * rate, currencyCode)}`;
+  });
+  const allocated = total * percentageTotal / 100;
+  refs.budgetAllocated.textContent = `Распределено: ${formatBudgetMoney(allocated * rate, currencyCode)} из ${formatBudgetMoney(total * rate, currencyCode)} · ${percentageTotal.toLocaleString("ru-RU")} %`;
+  refs.budgetAllocated.classList.toggle("is-over", percentageTotal > 100.000001);
 }
 
 function openBudgetForm(budget = null) {
@@ -623,15 +678,16 @@ function saveBudgetFromForm(event) {
   const selected = [...refs.budgetCategories.querySelectorAll("[data-budget-category]:checked")];
   if (!selected.length) return setBudgetFormError("Выберите хотя бы одну категорию.");
   const categories = selected.map((check) => {
-    const amountInputForCategory = [...refs.budgetCategories.querySelectorAll("[data-budget-amount]")]
-      .find((input) => input.dataset.budgetAmount === check.dataset.budgetCategory);
-    return { name: check.dataset.budgetCategory, amount: amountInputForCategory?.value === "" ? NaN : Number(amountInputForCategory?.value) * rate };
+    const percentInput = [...refs.budgetCategories.querySelectorAll("[data-budget-percent]")]
+      .find((input) => input.dataset.budgetPercent === check.dataset.budgetCategory);
+    const percent = percentInput?.value === "" ? NaN : Number(percentInput?.value);
+    return { name: check.dataset.budgetCategory, amount: amountInput * percent / 100 * rate, percent };
   });
-  if (categories.some((entry) => !Number.isFinite(entry.amount) || entry.amount <= 0)) return setBudgetFormError("Укажите положительный лимит для каждой выбранной категории.");
-  const allocated = categories.reduce((sum, entry) => sum + entry.amount, 0);
+  if (categories.some((entry) => !Number.isFinite(entry.percent) || entry.percent < 0)) return setBudgetFormError("Укажите корректный процент для каждой выбранной категории.");
+  const percentageTotal = categories.reduce((sum, entry) => sum + entry.percent, 0);
   const amount = amountInput * rate;
-  if (allocated > amount + 0.000001) return setBudgetFormError("Сумма лимитов категорий превышает общий бюджет.");
-  const budget = { id: editingBudgetId || `budget-${Date.now()}`, name, amount, currency, startDate, endDate, categories };
+  if (percentageTotal > 100.000001) return setBudgetFormError("Сумма процентов категорий не может превышать 100%.");
+  const budget = { id: editingBudgetId || `budget-${Date.now()}`, name, amount, currency, startDate, endDate, categories: categories.map(({ name: categoryName, amount: categoryAmount }) => ({ name: categoryName, amount: categoryAmount })) };
   const index = categoryBudgets.findIndex((entry) => entry.id === budget.id);
   const nextBudgets = [...categoryBudgets];
   if (index >= 0) nextBudgets[index] = budget;
@@ -640,32 +696,6 @@ function saveBudgetFromForm(event) {
   selectedBudgetId = budget.id;
   closeBudgetForm();
   renderCategoryBudgets();
-}
-
-function distributeBudgetAutomatically() {
-  const selected = [...refs.budgetCategories.querySelectorAll("[data-budget-category]:checked")];
-  if (!selected.length) return setBudgetFormError("Сначала выберите категории и укажите проценты.");
-  const percentages = selected.map((check) => {
-    const input = [...refs.budgetCategories.querySelectorAll("[data-budget-percent]")]
-      .find((field) => field.dataset.budgetPercent === check.dataset.budgetCategory);
-    return input?.value === "" ? NaN : Number(input?.value);
-  });
-  if (percentages.some((value) => !Number.isFinite(value) || value < 0)) return setBudgetFormError("Введите корректные проценты от нуля.");
-  const sum = percentages.reduce((total, value) => total + value, 0);
-  if (sum > 100.000001) return setBudgetFormError("Сумма процентов не может превышать 100%.");
-  if (Math.abs(sum - 100) > 0.000001) return setBudgetFormError("Чтобы распределить весь бюджет, сумма процентов должна быть ровно 100%.");
-  const total = Number(refs.budgetAmount.value);
-  if (!Number.isFinite(total) || total <= 0) return setBudgetFormError("Сначала укажите общий лимит.");
-  selected.forEach((check) => {
-    const percentInput = [...refs.budgetCategories.querySelectorAll("[data-budget-percent]")]
-      .find((field) => field.dataset.budgetPercent === check.dataset.budgetCategory);
-    const amount = [...refs.budgetCategories.querySelectorAll("[data-budget-amount]")]
-      .find((field) => field.dataset.budgetAmount === check.dataset.budgetCategory);
-    const percent = Number(percentInput.value);
-    amount.value = String(Math.round(total * percent) / 100);
-  });
-  setBudgetFormError("");
-  updateBudgetAllocation();
 }
 
 function getUsers() {
@@ -1770,7 +1800,6 @@ function bindEvents() {
     refs.budgetForm.addEventListener("submit", saveBudgetFromForm);
     refs.budgetFormCancel.addEventListener("click", closeBudgetForm);
     refs.budgetAmount.addEventListener("input", updateBudgetAllocation);
-    refs.budgetAutoDistribute.addEventListener("click", distributeBudgetAutomatically);
     refs.budgetList.addEventListener("click", (event) => {
       const button = event.target.closest("[data-budget-details]");
       if (!button) return;
