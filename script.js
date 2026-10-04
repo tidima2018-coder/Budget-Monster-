@@ -80,6 +80,7 @@ const refs = {
   dateInput: document.getElementById("dateInput"),
   commentInput: document.getElementById("commentInput"),
   incomeSummary: document.getElementById("incomeSummary"),
+  incomeLimitNote: document.getElementById("incomeLimitNote"),
   expenseSummary: document.getElementById("expenseSummary"),
   balanceSummary: document.getElementById("balanceSummary"),
   emptyState: document.getElementById("emptyState"),
@@ -90,6 +91,7 @@ const refs = {
   views: document.querySelectorAll(".page-view"),
   categoryBreakdown: document.getElementById("categoryBreakdown"),
   analyticsIncome: document.getElementById("analyticsIncome"),
+  analyticsIncomeLimitNote: document.getElementById("analyticsIncomeLimitNote"),
   analyticsExpense: document.getElementById("analyticsExpense"),
   analyticsBalance: document.getElementById("analyticsBalance"),
   analyticsOperationTotal: document.getElementById("analyticsOperationTotal"),
@@ -112,6 +114,7 @@ const refs = {
   spendingLimitForm: document.getElementById("spendingLimitForm"),
   spendingLimitAmount: document.getElementById("spendingLimitAmount"),
   spendingDailyAmount: document.getElementById("spendingDailyAmount"),
+  spendingLimitError: document.getElementById("spendingLimitError"),
   spendingLimitPeriod: document.getElementById("spendingLimitPeriod"),
   spendingLimitStatus: document.getElementById("spendingLimitStatus"),
   spendingLimitProgress: document.getElementById("spendingLimitProgress"),
@@ -553,10 +556,11 @@ function validateForm() {
 }
 
 function getCurrentBalance() {
-  return operations.reduce((balance, operation) => {
+  const operationBalance = operations.reduce((balance, operation) => {
     const amount = Number(operation.amount) || 0;
     return balance + (operation.type === "income" ? amount : -amount);
   }, 0);
+  return operationBalance + (Number(state.spendingLimit.amount) || 0);
 }
 
 const SPENDING_PERIOD_LABELS = {
@@ -727,10 +731,28 @@ function renderSpendingLimit() {
   renderOperationLimitHint();
 }
 
+function validateSpendingLimitDraft() {
+  const amount = Number(refs.spendingLimitAmount.value);
+  const dailyText = refs.spendingDailyAmount.value.trim();
+  const dailyAmount = Number(dailyText);
+  let message = "";
+  if (dailyText && (!Number.isFinite(dailyAmount) || dailyAmount <= 0)) {
+    message = "Введите дневной лимит больше нуля или оставьте поле пустым.";
+  } else if (dailyText && (!Number.isFinite(amount) || amount <= 0)) {
+    message = "Сначала задайте общий лимит.";
+  } else if (dailyText && dailyAmount > amount) {
+    message = "Дневной лимит не может быть больше общего лимита.";
+  }
+  refs.spendingLimitError.textContent = message;
+  refs.spendingLimitError.hidden = !message;
+  return !message;
+}
+
 function calculateTotals() {
-  const income = operations
+  const recordedIncome = operations
     .filter((operation) => operation.type === "income")
     .reduce((sum, operation) => sum + Number(operation.amount || 0), 0);
+  const income = recordedIncome + (Number(state.spendingLimit.amount) || 0);
 
   const expense = operations
     .filter((operation) => operation.type === "expense")
@@ -739,6 +761,7 @@ function calculateTotals() {
   const balance = income - expense;
 
   refs.incomeSummary.textContent = formatMoney(income);
+  refs.incomeLimitNote.hidden = !(state.spendingLimit.amount > 0);
   refs.expenseSummary.textContent = formatMoney(expense);
   refs.balanceSummary.textContent = formatMoney(balance);
 
@@ -752,6 +775,7 @@ function calculateTotals() {
 
 function renderAnalytics(totals) {
   refs.analyticsIncome.textContent = formatMoney(totals.income);
+  refs.analyticsIncomeLimitNote.hidden = !(state.spendingLimit.amount > 0);
   refs.analyticsExpense.textContent = formatMoney(totals.expense);
   refs.analyticsBalance.textContent = formatMoney(totals.balance);
   refs.analyticsOperationTotal.textContent = String(operations.length);
@@ -1339,14 +1363,10 @@ function bindEvents() {
     const amount = Number(refs.spendingLimitAmount.value);
     const dailyAmountText = refs.spendingDailyAmount.value.trim();
     const dailyAmount = Number(dailyAmountText);
+    if (!validateSpendingLimitDraft()) return;
     if (!Number.isFinite(amount) || amount <= 0) {
       refs.spendingLimitAmount.setCustomValidity("Введите сумму больше нуля.");
       refs.spendingLimitAmount.reportValidity();
-      return;
-    }
-    if (dailyAmountText && (!Number.isFinite(dailyAmount) || dailyAmount <= 0)) {
-      refs.spendingDailyAmount.setCustomValidity("Введите дневной лимит больше нуля или оставьте поле пустым.");
-      refs.spendingDailyAmount.reportValidity();
       return;
     }
     refs.spendingLimitAmount.setCustomValidity("");
@@ -1358,10 +1378,16 @@ function bindEvents() {
       startDate: getTodayISO()
     };
     saveSettings();
-    renderSpendingLimit();
+    renderApp();
   });
-  refs.spendingLimitAmount.addEventListener("input", () => refs.spendingLimitAmount.setCustomValidity(""));
-  refs.spendingDailyAmount.addEventListener("input", () => refs.spendingDailyAmount.setCustomValidity(""));
+  refs.spendingLimitAmount.addEventListener("input", () => {
+    refs.spendingLimitAmount.setCustomValidity("");
+    validateSpendingLimitDraft();
+  });
+  refs.spendingDailyAmount.addEventListener("input", () => {
+    refs.spendingDailyAmount.setCustomValidity("");
+    validateSpendingLimitDraft();
+  });
 
   refs.cancelDeleteOperationBtn.addEventListener("click", closeDeleteOperationDialog);
   refs.confirmDeleteOperationBtn.addEventListener("click", confirmDeleteOperation);
