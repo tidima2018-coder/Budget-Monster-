@@ -1,5 +1,6 @@
 ﻿const STORAGE_KEY = "budgetMonsterOperations";
 const SETTINGS_KEY = "budgetMonsterSettings";
+const BUDGETS_KEY = "budgetMonsterCategoryBudgets";
 const USERS_KEY = "budgetMonsterUsers";
 const SESSION_KEY = "budgetMonsterSession";
 const DEFAULT_CURRENCY = "KZT";
@@ -38,6 +39,9 @@ const CATEGORY_OPTIONS = {
     "Техника",
     "Развлечения",
     "Здоровье",
+    "Покупки",
+    "Карманные расходы",
+    "Накопления",
     "Дом",
     "Другое"
   ]
@@ -115,6 +119,30 @@ const refs = {
   switcherAvatar: document.getElementById("switcherAvatar"),
   brandAvatar: document.getElementById("brandAvatar"),
   spendingLimitForm: document.getElementById("spendingLimitForm"),
+  budgetList: document.getElementById("categoryBudgetList"),
+  budgetForm: document.getElementById("categoryBudgetForm"),
+  budgetName: document.getElementById("categoryBudgetName"),
+  budgetAmount: document.getElementById("categoryBudgetAmount"),
+  budgetTotalLabel: document.getElementById("categoryBudgetTotalLabel"),
+  budgetCurrency: document.getElementById("categoryBudgetCurrency"),
+  budgetCurrencySymbol: document.getElementById("categoryBudgetCurrencySymbol"),
+  budgetStart: document.getElementById("categoryBudgetStart"),
+  budgetEnd: document.getElementById("categoryBudgetEnd"),
+  budgetCategories: document.getElementById("categoryBudgetCategories"),
+  budgetAllocated: document.getElementById("categoryBudgetAllocated"),
+  budgetFormError: document.getElementById("categoryBudgetFormError"),
+  budgetFormTitle: document.getElementById("categoryBudgetFormTitle"),
+  budgetFormCancel: document.getElementById("categoryBudgetCancel"),
+  budgetFormOpen: document.getElementById("categoryBudgetNew"),
+  budgetAutoDistribute: document.getElementById("categoryBudgetAuto"),
+  budgetDetail: document.getElementById("categoryBudgetDetail"),
+  budgetDetailContent: document.getElementById("categoryBudgetDetailContent"),
+  budgetDetailTitle: document.getElementById("categoryBudgetDetailTitle"),
+  budgetDetailDates: document.getElementById("categoryBudgetDetailDates"),
+  budgetDeleteDialog: document.getElementById("categoryBudgetDeleteDialog"),
+  budgetDeleteCancel: document.getElementById("categoryBudgetDeleteCancel"),
+  budgetDeleteConfirm: document.getElementById("categoryBudgetDeleteConfirm"),
+  budgetDeleteError: document.getElementById("categoryBudgetDeleteError"),
   resetAccountDataBtn: document.getElementById("resetAccountDataBtn"),
   spendingLimitAmount: document.getElementById("spendingLimitAmount"),
   spendingDailyAmount: document.getElementById("spendingDailyAmount"),
@@ -131,10 +159,16 @@ const refs = {
 };
 
 let operations = [];
+let categoryBudgets = [];
+let editingBudgetId = null;
+let pendingBudgetDeleteId = null;
+let selectedBudgetId = null;
+let budgetEditorCurrency = DEFAULT_CURRENCY;
 let operationPendingDelete = null;
 let deleteDialogTrigger = null;
 let authEventsBound = false;
 let currencyPickerBound = false;
+let categoryBudgetEventsBound = false;
 
 const state = {
   currentType: "income",
@@ -284,6 +318,354 @@ function loadOperations() {
 
 function saveOperations() {
   localStorage.setItem(accountStorageKey(STORAGE_KEY), JSON.stringify(operations));
+}
+
+function loadCategoryBudgets() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(accountStorageKey(BUDGETS_KEY)) || "[]");
+    categoryBudgets = Array.isArray(saved) ? saved : [];
+  } catch (error) {
+    categoryBudgets = [];
+  }
+  selectedBudgetId = categoryBudgets[0]?.id ?? null;
+}
+
+function saveCategoryBudgets(nextBudgets = categoryBudgets) {
+  try {
+    localStorage.setItem(accountStorageKey(BUDGETS_KEY), JSON.stringify(nextBudgets));
+    categoryBudgets = nextBudgets;
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function currencyLabel(code) {
+  const currency = CURRENCY_OPTIONS[code] || CURRENCY_OPTIONS[DEFAULT_CURRENCY];
+  return currency.symbol;
+}
+
+function formatBudgetMoney(amount, code) {
+  const currency = CURRENCY_OPTIONS[code] || CURRENCY_OPTIONS[DEFAULT_CURRENCY];
+  const value = (Number(amount) || 0) / currency.rate;
+  return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: currency.decimals }).format(value)} ${currency.symbol}`;
+}
+
+function getBudgetCategorySpent(budget, category) {
+  return operations.reduce((sum, operation) => {
+    if (operation.type !== "expense" || operation.category !== category) return sum;
+    if (operation.date < budget.startDate || operation.date > budget.endDate) return sum;
+    return sum + (Number(operation.amount) || 0);
+  }, 0);
+}
+
+function getBudgetSpent(budget) {
+  return (budget.categories || []).reduce((sum, entry) => sum + getBudgetCategorySpent(budget, entry.name), 0);
+}
+
+function getBudgetTone(percent) {
+  if (percent > 100) return "critical";
+  if (percent >= 90) return "danger";
+  if (percent > 70) return "warning";
+  return "good";
+}
+
+function makeBudgetProgress(percent, label) {
+  const progress = document.createElement("div");
+  progress.className = `category-budget-progress is-${getBudgetTone(percent)}`;
+  progress.setAttribute("role", "progressbar");
+  progress.setAttribute("aria-label", label);
+  progress.setAttribute("aria-valuemin", "0");
+  progress.setAttribute("aria-valuemax", "100");
+  progress.setAttribute("aria-valuenow", String(Math.min(Math.round(percent), 100)));
+  const fill = document.createElement("span");
+  fill.style.width = `${Math.min(Math.max(percent, 0), 100)}%`;
+  progress.append(fill);
+  return progress;
+}
+
+function renderCategoryBudgets() {
+  if (!refs.budgetList) return;
+  refs.budgetList.replaceChildren();
+  if (!categoryBudgets.length) {
+    const empty = document.createElement("p");
+    empty.className = "category-budget-empty";
+    empty.textContent = "Создайте бюджет и задайте лимиты по категориям расходов.";
+    refs.budgetList.append(empty);
+    refs.budgetDetail.hidden = true;
+    return;
+  }
+
+  categoryBudgets.forEach((budget) => {
+    const spent = getBudgetSpent(budget);
+    const percent = budget.amount > 0 ? spent / budget.amount * 100 : 0;
+    const card = document.createElement("article");
+    card.className = `category-budget-card${budget.id === selectedBudgetId ? " is-selected" : ""}`;
+    const heading = document.createElement("div");
+    heading.className = "category-budget-card-heading";
+    const title = document.createElement("div");
+    const name = document.createElement("h3");
+    name.textContent = budget.name;
+    const dates = document.createElement("small");
+    dates.textContent = `${formatDateForInput(budget.startDate)} — ${formatDateForInput(budget.endDate)}`;
+    title.append(name, dates);
+    const total = document.createElement("strong");
+    total.textContent = `${formatBudgetMoney(spent, budget.currency)} / ${formatBudgetMoney(budget.amount, budget.currency)}`;
+    heading.append(title, total);
+    const bar = makeBudgetProgress(percent, `Использовано ${percent.toFixed(1)}% бюджета`);
+    const footer = document.createElement("div");
+    footer.className = "category-budget-card-footer";
+    const remaining = document.createElement("span");
+    remaining.textContent = `Осталось: ${formatBudgetMoney(budget.amount - spent, budget.currency)}`;
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "secondary-button";
+    more.dataset.budgetDetails = String(budget.id);
+    more.textContent = "Подробнее";
+    footer.append(remaining, more);
+    card.append(heading, bar, footer);
+    refs.budgetList.append(card);
+  });
+
+  const selected = categoryBudgets.find((budget) => budget.id === selectedBudgetId) || categoryBudgets[0];
+  if (selected) renderBudgetDetail(selected);
+}
+
+function renderBudgetDetail(budget) {
+  refs.budgetDetail.hidden = false;
+  refs.budgetDetail.dataset.budgetId = String(budget.id);
+  refs.budgetDetailTitle.textContent = budget.name;
+  refs.budgetDetailDates.textContent = `${formatDateForInput(budget.startDate)} — ${formatDateForInput(budget.endDate)}`;
+  refs.budgetDetailContent.replaceChildren();
+  const spent = getBudgetSpent(budget);
+  const percent = budget.amount > 0 ? spent / budget.amount * 100 : 0;
+  const summary = document.createElement("div");
+  summary.className = "category-budget-summary";
+  const summaryValues = [
+    ["Общий лимит", formatBudgetMoney(budget.amount, budget.currency)],
+    ["Потрачено", formatBudgetMoney(spent, budget.currency)],
+    ["Осталось", formatBudgetMoney(budget.amount - spent, budget.currency)]
+  ];
+  summaryValues.forEach(([label, value]) => {
+    const item = document.createElement("div");
+    item.className = "category-budget-summary-item";
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    const amount = document.createElement("strong");
+    amount.textContent = value;
+    item.append(caption, amount);
+    summary.append(item);
+  });
+  const overall = document.createElement("div");
+  overall.className = "category-budget-overall";
+  overall.append(summary, makeBudgetProgress(percent, `Общий бюджет использован на ${percent.toFixed(1)}%`));
+  const overallLabel = document.createElement("span");
+  overallLabel.className = "category-budget-percent";
+  overallLabel.textContent = `${percent.toFixed(1)}% использовано`;
+  overall.append(overallLabel);
+  refs.budgetDetailContent.append(overall);
+
+  const list = document.createElement("div");
+  list.className = "category-budget-breakdown";
+  [...(budget.categories || [])]
+    .sort((a, b) => getBudgetCategorySpent(budget, b.name) - getBudgetCategorySpent(budget, a.name))
+    .forEach((entry) => {
+    const categorySpent = getBudgetCategorySpent(budget, entry.name);
+    const categoryPercent = entry.amount > 0 ? categorySpent / entry.amount * 100 : 0;
+    const row = document.createElement("article");
+    row.className = `category-budget-breakdown-item is-${getBudgetTone(categoryPercent)}`;
+    const head = document.createElement("div");
+    head.className = "category-budget-breakdown-heading";
+    const categoryName = document.createElement("h4");
+    categoryName.textContent = `${getCategoryIcon(entry.name)} ${entry.name}`;
+    const amounts = document.createElement("strong");
+    amounts.textContent = `${formatBudgetMoney(categorySpent, budget.currency)} / ${formatBudgetMoney(entry.amount, budget.currency)}`;
+    head.append(categoryName, amounts);
+    const remaining = entry.amount - categorySpent;
+    const caption = document.createElement("p");
+    caption.textContent = remaining < 0
+      ? `Лимит превышен на ${formatBudgetMoney(Math.abs(remaining), budget.currency)}`
+      : `Осталось: ${formatBudgetMoney(remaining, budget.currency)} · ${categoryPercent.toFixed(1)}%`;
+    row.append(head, caption, makeBudgetProgress(categoryPercent, `${entry.name}: использовано ${categoryPercent.toFixed(1)}%`));
+    list.append(row);
+    });
+  refs.budgetDetailContent.append(list);
+}
+
+function getCategoryIcon(name) {
+  const icons = { "Продукты": "🍔", "Одежда": "👕", "Транспорт": "🚕", "Техника": "💻", "Развлечения": "🎬", "Здоровье": "💊", "Покупки": "🛍️", "Карманные расходы": "👛", "Накопления": "🐷", "Дом": "🏠", "Другое": "📦" };
+  return icons[name] || "📦";
+}
+
+function setBudgetEditorCurrency(nextCurrency) {
+  if (!CURRENCY_OPTIONS[nextCurrency] || nextCurrency === budgetEditorCurrency) return;
+  const previousRate = CURRENCY_OPTIONS[budgetEditorCurrency]?.rate || 1;
+  const nextRate = CURRENCY_OPTIONS[nextCurrency].rate;
+  const factor = previousRate / nextRate;
+  refs.budgetAmount.value = refs.budgetAmount.value ? String(Number(refs.budgetAmount.value) * factor) : "";
+  refs.budgetCategories.querySelectorAll("[data-budget-amount]").forEach((input) => {
+    if (input.value) input.value = String(Number(input.value) * factor);
+    input.placeholder = `Лимит ${currencyLabel(nextCurrency)}`;
+  });
+  budgetEditorCurrency = nextCurrency;
+  refs.budgetCurrency.value = nextCurrency;
+  refs.budgetCurrencySymbol.textContent = currencyLabel(nextCurrency);
+  refs.budgetTotalLabel.textContent = `Общий лимит (${currencyLabel(nextCurrency)})`;
+  updateBudgetAllocation();
+}
+
+function renderBudgetCategoryFields(budget = null) {
+  const existing = new Map((budget?.categories || []).map((entry) => [entry.name, entry]));
+  refs.budgetCategories.replaceChildren();
+  CATEGORY_OPTIONS.expense.forEach((name) => {
+    const entry = existing.get(name);
+    const row = document.createElement("div");
+    row.className = "category-budget-editor-row";
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.dataset.budgetCategory = name;
+    check.checked = Boolean(entry);
+    check.setAttribute("aria-label", `Включить категорию ${name}`);
+    const label = document.createElement("span");
+    label.className = "category-budget-editor-name";
+    label.textContent = `${getCategoryIcon(name)} ${name}`;
+    const amount = document.createElement("input");
+    amount.type = "number";
+    amount.min = "0";
+    amount.step = "any";
+    amount.placeholder = `Лимит ${currencyLabel(refs.budgetCurrency.value || DEFAULT_CURRENCY)}`;
+    amount.dataset.budgetAmount = name;
+    amount.value = entry ? String(entry.amount / (CURRENCY_OPTIONS[budget.currency]?.rate || 1)) : "";
+    amount.disabled = !entry;
+    amount.setAttribute("aria-label", `Лимит категории ${name}`);
+    const percent = document.createElement("input");
+    percent.type = "number";
+    percent.min = "0";
+    percent.max = "100";
+    percent.step = "any";
+    percent.placeholder = "%";
+    percent.dataset.budgetPercent = name;
+    percent.value = entry && budget.amount > 0 ? String((entry.amount / budget.amount * 100).toFixed(2)) : "";
+    percent.disabled = !entry;
+    percent.setAttribute("aria-label", `Процент для категории ${name}`);
+    check.addEventListener("change", () => {
+      amount.disabled = !check.checked;
+      percent.disabled = !check.checked;
+      if (!check.checked) { amount.value = ""; percent.value = ""; }
+      updateBudgetAllocation();
+    });
+    amount.addEventListener("input", updateBudgetAllocation);
+    percent.addEventListener("input", () => { amount.dataset.manual = "true"; });
+    row.append(check, label, amount, percent);
+    refs.budgetCategories.append(row);
+  });
+  updateBudgetAllocation();
+}
+
+function updateBudgetAllocation() {
+  if (!refs.budgetAmount) return;
+  const currencyCode = refs.budgetCurrency.value || DEFAULT_CURRENCY;
+  const rate = CURRENCY_OPTIONS[currencyCode]?.rate || 1;
+  const allocated = [...refs.budgetCategories.querySelectorAll("[data-budget-amount]")]
+    .filter((input) => !input.disabled && input.value !== "")
+    .reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+  const total = Number(refs.budgetAmount.value) || 0;
+  refs.budgetAllocated.textContent = `Распределено: ${formatBudgetMoney(allocated * rate, currencyCode)} из ${formatBudgetMoney(total * rate, currencyCode)}`;
+  refs.budgetAllocated.classList.toggle("is-over", allocated > total + 0.000001);
+}
+
+function openBudgetForm(budget = null) {
+  editingBudgetId = budget?.id ?? null;
+  refs.budgetForm.reset();
+  refs.budgetFormError.hidden = true;
+  refs.budgetFormError.textContent = "";
+  refs.budgetFormTitle.textContent = budget ? "Изменить бюджет" : "Новый бюджет";
+  refs.budgetName.value = budget?.name || "";
+  const currency = budget?.currency || state.currency;
+  budgetEditorCurrency = currency;
+  refs.budgetCurrency.value = currency;
+  refs.budgetTotalLabel.textContent = `Общий лимит (${currencyLabel(currency)})`;
+  const rate = CURRENCY_OPTIONS[currency]?.rate || 1;
+  refs.budgetAmount.value = budget ? String(budget.amount / rate) : "";
+  refs.budgetStart.value = formatDateForInput(budget?.startDate || getTodayISO());
+  const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+  const localMonthEnd = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`;
+  refs.budgetEnd.value = formatDateForInput(budget?.endDate || localMonthEnd);
+  refs.budgetCurrencySymbol.textContent = currencyLabel(currency);
+  renderBudgetCategoryFields(budget);
+  refs.budgetForm.hidden = false;
+  refs.budgetForm.scrollIntoView({ behavior: "smooth", block: "center" });
+  refs.budgetName.focus();
+}
+
+function closeBudgetForm() {
+  refs.budgetForm.hidden = true;
+  editingBudgetId = null;
+}
+
+function setBudgetFormError(message) {
+  refs.budgetFormError.textContent = message;
+  refs.budgetFormError.hidden = !message;
+}
+
+function saveBudgetFromForm(event) {
+  event.preventDefault();
+  const name = refs.budgetName.value.trim();
+  const amountInput = Number(refs.budgetAmount.value);
+  const currency = refs.budgetCurrency.value;
+  const rate = CURRENCY_OPTIONS[currency]?.rate || 1;
+  if (!name) return setBudgetFormError("Введите название бюджета.");
+  if (!Number.isFinite(amountInput) || amountInput <= 0) return setBudgetFormError("Общий лимит должен быть больше нуля.");
+  const startDate = parseDateInput(refs.budgetStart.value);
+  const endDate = parseDateInput(refs.budgetEnd.value);
+  if (!startDate || !endDate) return setBudgetFormError("Введите корректные даты в формате ДД.ММ.ГГГГ.");
+  if (endDate < startDate) return setBudgetFormError("Дата окончания должна быть не раньше даты начала.");
+  const selected = [...refs.budgetCategories.querySelectorAll("[data-budget-category]:checked")];
+  if (!selected.length) return setBudgetFormError("Выберите хотя бы одну категорию.");
+  const categories = selected.map((check) => {
+    const amountInputForCategory = [...refs.budgetCategories.querySelectorAll("[data-budget-amount]")]
+      .find((input) => input.dataset.budgetAmount === check.dataset.budgetCategory);
+    return { name: check.dataset.budgetCategory, amount: amountInputForCategory?.value === "" ? NaN : Number(amountInputForCategory?.value) * rate };
+  });
+  if (categories.some((entry) => !Number.isFinite(entry.amount) || entry.amount <= 0)) return setBudgetFormError("Укажите положительный лимит для каждой выбранной категории.");
+  const allocated = categories.reduce((sum, entry) => sum + entry.amount, 0);
+  const amount = amountInput * rate;
+  if (allocated > amount + 0.000001) return setBudgetFormError("Сумма лимитов категорий превышает общий бюджет.");
+  const budget = { id: editingBudgetId || `budget-${Date.now()}`, name, amount, currency, startDate, endDate, categories };
+  const index = categoryBudgets.findIndex((entry) => entry.id === budget.id);
+  const nextBudgets = [...categoryBudgets];
+  if (index >= 0) nextBudgets[index] = budget;
+  else nextBudgets.unshift(budget);
+  if (!saveCategoryBudgets(nextBudgets)) return setBudgetFormError("Не удалось сохранить бюджет в этом браузере. Освободите место в хранилище или проверьте его настройки.");
+  selectedBudgetId = budget.id;
+  closeBudgetForm();
+  renderCategoryBudgets();
+}
+
+function distributeBudgetAutomatically() {
+  const selected = [...refs.budgetCategories.querySelectorAll("[data-budget-category]:checked")];
+  if (!selected.length) return setBudgetFormError("Сначала выберите категории и укажите проценты.");
+  const percentages = selected.map((check) => {
+    const input = [...refs.budgetCategories.querySelectorAll("[data-budget-percent]")]
+      .find((field) => field.dataset.budgetPercent === check.dataset.budgetCategory);
+    return input?.value === "" ? NaN : Number(input?.value);
+  });
+  if (percentages.some((value) => !Number.isFinite(value) || value < 0)) return setBudgetFormError("Введите корректные проценты от нуля.");
+  const sum = percentages.reduce((total, value) => total + value, 0);
+  if (sum > 100.000001) return setBudgetFormError("Сумма процентов не может превышать 100%.");
+  if (Math.abs(sum - 100) > 0.000001) return setBudgetFormError("Чтобы распределить весь бюджет, сумма процентов должна быть ровно 100%.");
+  const total = Number(refs.budgetAmount.value);
+  if (!Number.isFinite(total) || total <= 0) return setBudgetFormError("Сначала укажите общий лимит.");
+  selected.forEach((check) => {
+    const percentInput = [...refs.budgetCategories.querySelectorAll("[data-budget-percent]")]
+      .find((field) => field.dataset.budgetPercent === check.dataset.budgetCategory);
+    const amount = [...refs.budgetCategories.querySelectorAll("[data-budget-amount]")]
+      .find((field) => field.dataset.budgetAmount === check.dataset.budgetCategory);
+    const percent = Number(percentInput.value);
+    amount.value = String(Math.round(total * percent) / 100);
+  });
+  setBudgetFormError("");
+  updateBudgetAllocation();
 }
 
 function getUsers() {
@@ -960,6 +1342,7 @@ function renderOperations() {
 function renderApp() {
   calculateTotals();
   renderOperations();
+  renderCategoryBudgets();
 }
 
 function closeDeleteOperationDialog(restoreFocus = true) {
@@ -1367,6 +1750,70 @@ function bindAuthEvents() {
 }
 
 function bindEvents() {
+  if (!categoryBudgetEventsBound) {
+    categoryBudgetEventsBound = true;
+    Object.entries(CURRENCY_OPTIONS).forEach(([code, option]) => {
+      const currencyOption = document.createElement("option");
+      currencyOption.value = code;
+      currencyOption.textContent = `${code} · ${option.symbol} · ${option.label}`;
+      refs.budgetCurrency.append(currencyOption);
+    });
+    refs.budgetCurrency.addEventListener("change", () => setBudgetEditorCurrency(refs.budgetCurrency.value));
+    [refs.budgetStart, refs.budgetEnd].forEach((input) => {
+      input.addEventListener("input", () => {
+        const formatted = normalizeDateInput(input.value);
+        if (input.value !== formatted) input.value = formatted;
+        setBudgetFormError("");
+      });
+    });
+    refs.budgetFormOpen.addEventListener("click", () => openBudgetForm());
+    refs.budgetForm.addEventListener("submit", saveBudgetFromForm);
+    refs.budgetFormCancel.addEventListener("click", closeBudgetForm);
+    refs.budgetAmount.addEventListener("input", updateBudgetAllocation);
+    refs.budgetAutoDistribute.addEventListener("click", distributeBudgetAutomatically);
+    refs.budgetList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-budget-details]");
+      if (!button) return;
+      selectedBudgetId = button.dataset.budgetDetails;
+      renderCategoryBudgets();
+      refs.budgetDetail.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    refs.budgetDetail.addEventListener("click", (event) => {
+      const budget = categoryBudgets.find((entry) => String(entry.id) === refs.budgetDetail.dataset.budgetId);
+      if (!budget) return;
+      if (event.target.closest("[data-budget-edit]")) openBudgetForm(budget);
+      if (event.target.closest("[data-budget-delete]")) {
+        pendingBudgetDeleteId = budget.id;
+        refs.budgetDeleteError.hidden = true;
+        refs.budgetDeleteError.textContent = "";
+        refs.budgetDeleteDialog.hidden = false;
+        refs.budgetDeleteCancel.focus();
+      }
+    });
+    const closeBudgetDeleteDialog = () => {
+      refs.budgetDeleteDialog.hidden = true;
+      pendingBudgetDeleteId = null;
+    };
+    refs.budgetDeleteCancel.addEventListener("click", closeBudgetDeleteDialog);
+    refs.budgetDeleteDialog.addEventListener("click", (event) => {
+      if (event.target === refs.budgetDeleteDialog) closeBudgetDeleteDialog();
+    });
+    refs.budgetDeleteConfirm.addEventListener("click", () => {
+      const nextBudgets = categoryBudgets.filter((entry) => entry.id !== pendingBudgetDeleteId);
+      if (!saveCategoryBudgets(nextBudgets)) {
+        refs.budgetDeleteError.textContent = "Не удалось обновить бюджеты в хранилище браузера.";
+        refs.budgetDeleteError.hidden = false;
+        return;
+      }
+      selectedBudgetId = categoryBudgets[0]?.id ?? null;
+      closeBudgetDeleteDialog();
+      renderCategoryBudgets();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !refs.budgetDeleteDialog.hidden) closeBudgetDeleteDialog();
+    });
+  }
+
   refs.resetAccountDataBtn.addEventListener("click", () => {
     refs.resetAccountDialog.hidden = false;
     refs.cancelResetAccountBtn.focus();
@@ -1384,7 +1831,10 @@ function bindEvents() {
   refs.confirmResetAccountBtn.addEventListener("click", () => {
     localStorage.removeItem(accountStorageKey(STORAGE_KEY));
     localStorage.removeItem(accountStorageKey(SETTINGS_KEY));
+    localStorage.removeItem(accountStorageKey(BUDGETS_KEY));
     operations = [];
+    categoryBudgets = [];
+    selectedBudgetId = null;
     state.currency = DEFAULT_CURRENCY;
     state.theme = "dark";
     state.layoutMode = "desktop";
@@ -1627,6 +2077,7 @@ function bindEvents() {
 
 function init() {
   loadSettings();
+  loadCategoryBudgets();
   applyTheme();
   applyLayoutMode();
   bindCurrencyPicker();

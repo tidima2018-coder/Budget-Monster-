@@ -233,6 +233,51 @@
             </div>
             <p id="spendingLimitHint" class="spending-limit-hint">Расходы сверх доступного остатка будут отклоняться.</p>
           </section>
+
+          <section class="panel category-budget-panel" aria-labelledby="categoryBudgetHeading">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">ПЛАН ПО КАТЕГОРИЯМ</p>
+                <h2 id="categoryBudgetHeading">Бюджеты</h2>
+              </div>
+              <button type="button" id="categoryBudgetNew" class="primary-button category-budget-new">+ Новый бюджет</button>
+            </div>
+            <div id="categoryBudgetList" class="category-budget-list"></div>
+            <form id="categoryBudgetForm" class="category-budget-form" hidden novalidate>
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">НАСТРОЙКА ПЛАНА</p>
+                  <h3 id="categoryBudgetFormTitle">Новый бюджет</h3>
+                </div>
+              </div>
+              <div class="category-budget-fields">
+                <label class="field"><span>Название</span><input id="categoryBudgetName" type="text" maxlength="60" placeholder="Например, Мой бюджет" required /></label>
+                <label class="field"><span id="categoryBudgetTotalLabel">Общий лимит</span><input id="categoryBudgetAmount" type="number" min="0.01" step="any" placeholder="100000" required /></label>
+                <label class="field"><span>Валюта бюджета</span><span class="category-budget-currency-picker"><span id="categoryBudgetCurrencySymbol" class="category-budget-currency-symbol" aria-hidden="true">₸</span><select id="categoryBudgetCurrency" aria-label="Валюта бюджета"></select></span></label>
+                <label class="field"><span>Дата начала</span><input id="categoryBudgetStart" class="budget-date-input" type="text" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" autocomplete="off" aria-describedby="categoryBudgetDateHint" required /></label>
+                <label class="field"><span>Дата окончания</span><input id="categoryBudgetEnd" class="budget-date-input" type="text" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" autocomplete="off" aria-describedby="categoryBudgetDateHint" required /></label>
+                <p id="categoryBudgetDateHint" class="category-budget-date-hint">Введите дату цифрами, например 01.10.2026.</p>
+              </div>
+              <div class="category-budget-distribution-header">
+                <div><h4>Распределение</h4><p>Выберите категории и задайте лимит или процент.</p></div>
+                <button type="button" id="categoryBudgetAuto" class="secondary-button">Распределить автоматически</button>
+              </div>
+              <div id="categoryBudgetCategories" class="category-budget-category-fields"></div>
+              <p id="categoryBudgetAllocated" class="category-budget-allocated" aria-live="polite"></p>
+              <p id="categoryBudgetFormError" class="spending-limit-error" role="alert" hidden></p>
+              <div class="form-actions">
+                <button type="submit" class="primary-button">Сохранить бюджет</button>
+                <button type="button" id="categoryBudgetCancel" class="secondary-button">Отмена</button>
+              </div>
+            </form>
+            <section id="categoryBudgetDetail" class="category-budget-detail" aria-live="polite" hidden>
+              <div class="panel-header">
+                <div><p class="eyebrow">ПОДРОБНЫЙ ОБЗОР</p><h3 id="categoryBudgetDetailTitle"></h3><p id="categoryBudgetDetailDates" class="category-budget-date-range"></p></div>
+                <div class="category-budget-actions"><button type="button" class="secondary-button" data-budget-edit>Изменить</button><button type="button" class="danger-button" data-budget-delete>Удалить</button></div>
+              </div>
+              <div id="categoryBudgetDetailContent"></div>
+            </section>
+          </section>
         </section>
 
         <section class="page-view" id="analyticsView" aria-labelledby="analyticsHeading" hidden>
@@ -475,6 +520,20 @@
         <div class="delete-confirm-actions">
           <button id="cancelResetAccountBtn" class="secondary-button" type="button">Отмена</button>
           <button id="confirmResetAccountBtn" class="danger-button" type="button">Сбросить</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="categoryBudgetDeleteDialog" class="account-switcher-dialog delete-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="categoryBudgetDeleteHeading" aria-describedby="categoryBudgetDeleteDescription" hidden>
+      <section class="panel delete-confirm-panel">
+        <div class="delete-confirm-icon" aria-hidden="true">!</div>
+        <p class="eyebrow">УДАЛЕНИЕ БЮДЖЕТА</p>
+        <h2 id="categoryBudgetDeleteHeading">Удалить бюджет?</h2>
+        <p id="categoryBudgetDeleteDescription">План будет удалён. Финансовые операции останутся без изменений.</p>
+        <p id="categoryBudgetDeleteError" class="spending-limit-error" role="alert" hidden></p>
+        <div class="delete-confirm-actions">
+          <button id="categoryBudgetDeleteCancel" class="secondary-button" type="button">Оставить</button>
+          <button id="categoryBudgetDeleteConfirm" class="danger-button" type="button">Удалить</button>
         </div>
       </section>
     </div>
