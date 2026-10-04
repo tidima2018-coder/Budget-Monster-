@@ -77,6 +77,7 @@ const refs = {
   closeAccountSwitcherBtn: document.getElementById("closeAccountSwitcherBtn"),
   addAccountBtn: document.getElementById("addAccountBtn"),
   form: document.getElementById("operationForm"),
+  formHeading: document.getElementById("formHeading"),
   formNotice: document.getElementById("formNotice"),
   toggleFormBtn: document.getElementById("toggleFormBtn"),
   cancelFormBtn: document.getElementById("cancelFormBtn"),
@@ -166,6 +167,7 @@ let pendingBudgetDeleteId = null;
 let selectedBudgetId = null;
 let budgetEditorCurrency = DEFAULT_CURRENCY;
 let operationPendingDelete = null;
+let editingOperationId = null;
 let deleteDialogTrigger = null;
 let authEventsBound = false;
 let currencyPickerBound = false;
@@ -364,11 +366,12 @@ function sameBudgetCategory(left, right) {
     === String(right || "").trim().toLocaleLowerCase("ru-RU");
 }
 
-function getBudgetCategorySpent(budget, category) {
+function getBudgetCategorySpent(budget, category, excludedOperationId = null) {
   const startDate = normalizeBudgetDate(budget.startDate);
   const endDate = normalizeBudgetDate(budget.endDate);
   if (!startDate || !endDate) return 0;
   return operations.reduce((sum, operation) => {
+    if (excludedOperationId !== null && operation.id === excludedOperationId) return sum;
     if (operation.budgetId && String(operation.budgetId) !== String(budget.id)) return sum;
     const operationDate = normalizeBudgetDate(operation.date);
     if (operation.type !== "expense" || !sameBudgetCategory(operation.category, category)) return sum;
@@ -985,7 +988,7 @@ function validateForm() {
   if (!amountValue || Number.isNaN(amount) || amount <= 0) {
     setFieldError("amount", "Введите корректную положительную сумму");
     isValid = false;
-  } else if (state.currentType === "expense" && amount > getCurrentBalance() + 0.000001) {
+  } else if (state.currentType === "expense" && amount > getCurrentBalance(editingOperationId) + 0.000001) {
     refs.formNotice.textContent = "Недостаточно средств на балансе для этого расхода.";
     refs.formNotice.hidden = false;
     isValid = false;
@@ -1015,8 +1018,8 @@ function validateForm() {
   }
 
   if (state.currentType === "expense" && amountValue && Number.isFinite(amount) && amount > 0 && dateValue && state.spendingLimit.amount > 0) {
-    const usage = getSpendingUsage(dateValue);
-    const daily = usage && getDailySpendingAllowance(usage, dateValue);
+    const usage = getSpendingUsage(dateValue, editingOperationId);
+    const daily = usage && getDailySpendingAllowance(usage, dateValue, editingOperationId);
     if (daily && amount > daily.remaining + 0.000001) {
       refs.formNotice.textContent = "Вы превышаете дневную сумму.";
       refs.formNotice.hidden = false;
@@ -1032,7 +1035,7 @@ function validateForm() {
       .flatMap((budget) => {
         const entry = (budget.categories || []).find((item) => sameBudgetCategory(item.name, categoryValue));
         if (!entry) return [];
-        const exceededBy = getBudgetCategorySpent(budget, entry.name) + amount - Number(entry.amount || 0);
+        const exceededBy = getBudgetCategorySpent(budget, entry.name, editingOperationId) + amount - Number(entry.amount || 0);
         return exceededBy > 0.000001 ? [{ budget, exceededBy }] : [];
       });
 
@@ -1050,8 +1053,9 @@ function validateForm() {
   return isValid;
 }
 
-function getCurrentBalance() {
+function getCurrentBalance(excludedOperationId = null) {
   const operationBalance = operations.reduce((balance, operation) => {
+    if (excludedOperationId !== null && operation.id === excludedOperationId) return balance;
     const amount = Number(operation.amount) || 0;
     return balance + (operation.type === "income" ? amount : -amount);
   }, 0);
@@ -1127,25 +1131,25 @@ function getSpendingPeriodRange(period, dateISO = getTodayISO()) {
   return { start, end };
 }
 
-function getSpendingUsage(dateISO = getTodayISO()) {
+function getSpendingUsage(dateISO = getTodayISO(), excludedOperationId = null) {
   const { amount, period } = state.spendingLimit;
   if (!amount) return null;
   const range = getSpendingPeriodRange(period, dateISO);
   if (!range) return null;
   const spent = operations
-    .filter((operation) => operation.type === "expense" && operation.date >= range.start && operation.date < range.end)
+    .filter((operation) => operation.id !== excludedOperationId && operation.type === "expense" && operation.date >= range.start && operation.date < range.end)
     .reduce((sum, operation) => sum + (Number(operation.amount) || 0), 0);
   return { range, amount, spent, remaining: amount - spent };
 }
 
-function getDailySpendingAllowance(usage, dateISO) {
+function getDailySpendingAllowance(usage, dateISO, excludedOperationId = null) {
   if (!usage) return null;
   const periodDays = Math.max(1, (Date.parse(`${usage.range.end}T00:00:00Z`) - Date.parse(`${usage.range.start}T00:00:00Z`)) / 86400000);
   const dailyCap = state.spendingLimit.dailyAmount > 0
     ? state.spendingLimit.dailyAmount
     : usage.amount / periodDays;
   const spentThatDay = operations
-    .filter((operation) => operation.type === "expense" && operation.date === dateISO
+    .filter((operation) => operation.id !== excludedOperationId && operation.type === "expense" && operation.date === dateISO
       && operation.date >= usage.range.start && operation.date < usage.range.end)
     .reduce((sum, operation) => sum + (Number(operation.amount) || 0), 0);
   return {
@@ -1175,7 +1179,7 @@ function renderOperationLimitHint() {
   const messages = [];
   categoryBudgetsForOperation.forEach((budget) => {
     const entry = budget.categories.find((item) => sameBudgetCategory(item.name, category));
-    const spentAfterOperation = getBudgetCategorySpent(budget, category) + amount;
+    const spentAfterOperation = getBudgetCategorySpent(budget, category, editingOperationId) + amount;
     const remaining = entry.amount - spentAfterOperation;
     const percent = entry.amount > 0 ? spentAfterOperation / entry.amount * 100 : 0;
     const status = remaining < 0
@@ -1194,13 +1198,13 @@ function renderOperationLimitHint() {
     refs.operationLimitHint.textContent = messages.join(" ");
     return;
   }
-  const usage = getSpendingUsage(dateISO);
+  const usage = getSpendingUsage(dateISO, editingOperationId);
   if (!usage) {
     messages.unshift(`Лимит начнет действовать с ${formatDateForInput(state.spendingLimit.startDate)}. Эта операция указана раньше срока.`);
     refs.operationLimitHint.textContent = messages.join(" ");
     return;
   }
-  const daily = getDailySpendingAllowance(usage, dateISO);
+  const daily = getDailySpendingAllowance(usage, dateISO, editingOperationId);
   if (amount > daily.remaining + 0.000001) {
     messages.unshift("Вы превышаете дневную сумму.");
     refs.operationLimitHint.classList.add("is-blocked");
@@ -1453,6 +1457,15 @@ function renderOperations() {
     const sign = operation.type === "income" ? "+ " : "- ";
     amount.textContent = `${sign}${formatMoney(operation.amount)}`;
 
+    const actions = document.createElement("div");
+    actions.className = "operation-actions";
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "secondary-button operation-edit-button";
+    editButton.textContent = "Изменить";
+    editButton.setAttribute("aria-label", `Изменить операцию ${operation.category}`);
+    editButton.addEventListener("click", () => openOperationForEdit(operation));
+
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.className = "delete-button";
@@ -1467,7 +1480,8 @@ function renderOperations() {
       refs.cancelDeleteOperationBtn.focus();
     });
 
-    item.append(info, amount, deleteButton);
+    actions.append(editButton, deleteButton);
+    item.append(info, amount, actions);
     refs.operationsList.appendChild(item);
   });
 }
@@ -1557,8 +1571,27 @@ function clearForm() {
   refs.commentInput.value = "";
   refs.dateInput.value = formatDateForInput(getTodayISO());
   clearFormErrors();
+  editingOperationId = null;
+  refs.formHeading.textContent = "Добавить операцию";
+  refs.form.querySelector('[type="submit"]').textContent = "Добавить";
   updateType("income");
   if (refs.operationBudgetSelect) refs.operationBudgetSelect.value = "";
+}
+
+function openOperationForEdit(operation) {
+  clearForm();
+  editingOperationId = operation.id;
+  populateOperationBudgetOptions();
+  updateType(operation.type);
+  refs.amountInput.value = String(operation.amount);
+  refs.categorySelect.value = operation.category;
+  refs.dateInput.value = formatDateForInput(normalizeBudgetDate(operation.date));
+  refs.commentInput.value = operation.comment || "";
+  refs.operationBudgetSelect.value = operation.budgetId ? String(operation.budgetId) : "";
+  refs.formHeading.textContent = "Изменить операцию";
+  refs.form.querySelector('[type="submit"]').textContent = "Сохранить изменения";
+  renderOperationLimitHint();
+  toggleForm(true);
 }
 
 function resetForm() {
@@ -1576,8 +1609,11 @@ function handleSubmit(event) {
     return;
   }
 
+  const editedOperation = editingOperationId !== null
+    ? operations.find((operation) => operation.id === editingOperationId)
+    : null;
   const newOperation = {
-    id: Date.now(),
+    id: editedOperation?.id ?? Date.now(),
     type: state.currentType,
     amount: Number(refs.amountInput.value),
     category: refs.categorySelect.value,
@@ -1587,7 +1623,9 @@ function handleSubmit(event) {
   const selectedBudgetId = refs.operationBudgetSelect?.value;
   if (state.currentType === "expense" && selectedBudgetId) newOperation.budgetId = selectedBudgetId;
 
-  operations = [newOperation, ...operations];
+  operations = editedOperation
+    ? operations.map((operation) => operation.id === editingOperationId ? newOperation : operation)
+    : [newOperation, ...operations];
   saveOperations();
   resetForm();
   renderApp();

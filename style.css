@@ -129,6 +129,13 @@ textarea:focus-visible {
   font-size: clamp(1.7rem, 3vw, 2.4rem);
 }
 
+.home-owner-label {
+  margin: 5px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -992,6 +999,19 @@ h1 {
   font-weight: 700;
 }
 
+.operation-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.operation-edit-button,
+.operation-actions .delete-button {
+  min-height: 38px;
+  padding: 0 11px;
+  white-space: nowrap;
+}
+
 .empty-state {
   display: flex;
   align-items: center;
@@ -1816,6 +1836,11 @@ h1 {
   }
 
   .delete-button {
+    justify-self: end;
+  }
+
+  .operation-actions {
+    grid-column: 1 / -1;
     justify-self: end;
   }
 
