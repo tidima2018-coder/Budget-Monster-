@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <div id="notificationStack" class="notification-stack" aria-live="assertive" aria-atomic="false"></div>
     <div id="authScreen" class="auth-screen" aria-live="polite">
       <div class="auth-card">
         <div class="auth-header">
@@ -56,8 +57,7 @@
 
     <div id="appShell" class="page-shell" hidden>
       <header class="topbar">
-        <div class="brand" aria-label="Логотип Budget Monster">
-          <div id="brandAvatar" class="brand-mark" aria-hidden="true">M</div>
+        <div class="brand">
           <div>
             <p class="eyebrow">Личный бюджет</p>
             <h1>Budget Monster</h1>
@@ -114,6 +114,14 @@
                 <div class="type-switch" role="tablist" aria-label="Тип операции">
                   <button type="button" class="type-option is-active" data-type="income" aria-pressed="true">Доход</button>
                   <button type="button" class="type-option" data-type="expense" aria-pressed="false">Расход</button>
+                </div>
+                <div id="operationNotification" class="operation-notification" role="alert" aria-live="assertive" hidden>
+                  <span class="operation-notification-icon" aria-hidden="true">!</span>
+                  <div class="operation-notification-content">
+                    <strong>Проверьте данные</strong>
+                    <div id="operationNotificationMessages" class="operation-notification-messages"></div>
+                  </div>
+                  <button type="button" id="operationNotificationOk" class="operation-notification-ok">Окей</button>
                 </div>
                 <div class="field">
                   <label for="amountInput">Сумма</label>
@@ -372,14 +380,6 @@
                   <h3>Текущий аккаунт</h3>
                   <p id="currentAccountDetails"></p>
                 </div>
-                <div class="avatar-setting-control">
-                  <div id="currentAvatar" class="account-avatar" aria-hidden="true">?</div>
-                  <div class="avatar-action-stack">
-                    <label for="avatarFileInput" class="secondary-button avatar-change-button">Сменить аватар</label>
-                    <p id="avatarStatus" class="avatar-status" aria-live="polite"></p>
-                  </div>
-                  <input id="avatarFileInput" class="sr-only" type="file" accept="image/*" />
-                </div>
               </div>
               <div class="setting-row">
                 <div>
@@ -408,7 +408,7 @@
                   <label class="sr-only" for="currencySearch">Найти валюту</label>
                   <input id="currencySearch" class="currency-search" type="search" placeholder="Найти валюту или код" autocomplete="off" />
                   <div id="currencyChoices" class="currency-choices" role="group" aria-label="Выберите валюту"></div>
-                  <p class="currency-rate-note">Справочные курсы НБК на 04.10.2026</p>
+                  <p id="currencyRateNote" class="currency-rate-note" aria-live="polite"></p>
                 </div>
               </div>
             </section>
@@ -485,7 +485,6 @@
           <button id="closeAccountSwitcherBtn" class="dialog-close" type="button" aria-label="Закрыть окно">×</button>
         </div>
         <div class="account-switcher-current">
-          <span id="switcherAvatar" class="account-avatar" aria-hidden="true">●</span>
           <div>
             <strong id="switcherAccountName"></strong>
             <span id="switcherAccountPhone"></span>

@@ -62,6 +62,7 @@ const refs = {
   authConfirmPassword: document.getElementById("authConfirmPassword"),
   authSubmitBtn: document.getElementById("authSubmitBtn"),
   authError: document.getElementById("authError"),
+  notificationStack: document.getElementById("notificationStack"),
   dialog: document.getElementById("operationDialog"),
   accountSwitcherDialog: document.getElementById("accountSwitcherDialog"),
   deleteOperationDialog: document.getElementById("deleteOperationDialog"),
@@ -79,6 +80,9 @@ const refs = {
   form: document.getElementById("operationForm"),
   formHeading: document.getElementById("formHeading"),
   formNotice: document.getElementById("formNotice"),
+  operationNotification: document.getElementById("operationNotification"),
+  operationNotificationMessages: document.getElementById("operationNotificationMessages"),
+  operationNotificationOk: document.getElementById("operationNotificationOk"),
   toggleFormBtn: document.getElementById("toggleFormBtn"),
   cancelFormBtn: document.getElementById("cancelFormBtn"),
   closeFormBtn: document.getElementById("closeFormBtn"),
@@ -110,17 +114,13 @@ const refs = {
   currencySearch: document.getElementById("currencySearch"),
   currencyChoices: document.getElementById("currencyChoices"),
   currencyCurrent: document.getElementById("currencyCurrent"),
+  currencyRateNote: document.getElementById("currencyRateNote"),
   clearOperationsBtn: document.getElementById("clearOperationsBtn"),
   currentAccountDetails: document.getElementById("currentAccountDetails"),
   logoutBtn: document.getElementById("logoutBtn"),
   switchAccountBtn: document.getElementById("switchAccountBtn"),
   savedAccountsList: document.getElementById("savedAccountsList"),
   noSavedAccounts: document.getElementById("noSavedAccounts"),
-  avatarFileInput: document.getElementById("avatarFileInput"),
-  avatarStatus: document.getElementById("avatarStatus"),
-  currentAvatar: document.getElementById("currentAvatar"),
-  switcherAvatar: document.getElementById("switcherAvatar"),
-  brandAvatar: document.getElementById("brandAvatar"),
   spendingLimitForm: document.getElementById("spendingLimitForm"),
   budgetList: document.getElementById("categoryBudgetList"),
   budgetForm: document.getElementById("categoryBudgetForm"),
@@ -171,6 +171,7 @@ let editingOperationId = null;
 let deleteDialogTrigger = null;
 let authEventsBound = false;
 let currencyPickerBound = false;
+let errorNotificationsBound = false;
 let categoryBudgetEventsBound = false;
 
 const state = {
@@ -182,6 +183,100 @@ const state = {
   user: null,
   authMode: "register"
 };
+
+function showErrorNotification(message) {
+  const text = String(message || "").trim();
+  if (!text || !refs.notificationStack) return;
+  const toast = document.createElement("div");
+  toast.className = "notification-toast";
+  toast.setAttribute("role", "alert");
+  const icon = document.createElement("span");
+  icon.className = "notification-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = "!";
+  const content = document.createElement("div");
+  content.className = "notification-content";
+  const title = document.createElement("strong");
+  title.textContent = "Проверьте данные";
+  const description = document.createElement("span");
+  description.textContent = text;
+  content.append(title, description);
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "notification-close";
+  close.setAttribute("aria-label", "Закрыть уведомление");
+  close.textContent = "×";
+  toast.append(icon, content, close);
+  refs.notificationStack.append(toast);
+
+  let dismissed = false;
+  const dismiss = () => {
+    if (dismissed) return;
+    dismissed = true;
+    toast.classList.add("is-leaving");
+    window.setTimeout(() => toast.remove(), 220);
+  };
+  close.addEventListener("click", dismiss);
+  window.setTimeout(dismiss, 4800);
+}
+
+function showOperationErrorNotification(message) {
+  const text = String(message || "").trim();
+  if (!text || !refs.operationNotification) return;
+  const alreadyShown = [...refs.operationNotificationMessages.children]
+    .some((item) => item.textContent === text);
+  if (!alreadyShown) {
+    const item = document.createElement("p");
+    item.className = "operation-notification-message";
+    item.textContent = text;
+    refs.operationNotificationMessages.append(item);
+  }
+  refs.operationNotification.hidden = false;
+  refs.operationNotification.classList.remove("is-visible");
+  void refs.operationNotification.offsetWidth;
+  refs.operationNotification.classList.add("is-visible");
+}
+
+function dismissOperationErrorNotification() {
+  refs.operationNotification.hidden = true;
+  refs.operationNotification.classList.remove("is-visible");
+  refs.operationNotificationMessages.replaceChildren();
+}
+
+function bindErrorNotifications() {
+  if (errorNotificationsBound || !refs.notificationStack) return;
+  errorNotificationsBound = true;
+  const selector = ".field-error, .form-notice, .spending-limit-error, .auth-error";
+  const lastMessages = new WeakMap();
+  const observer = new MutationObserver((mutations) => {
+    const pending = new Map();
+    mutations.forEach((mutation) => {
+      const source = mutation.target.nodeType === Node.ELEMENT_NODE
+        ? mutation.target
+        : mutation.target.parentElement;
+      if (!source?.matches(selector)) return;
+      let lastMessage = lastMessages.get(source) || "";
+      if (mutation.type === "childList") {
+        if (mutation.removedNodes.length) lastMessage = "";
+        const addedText = [...mutation.addedNodes].map((node) => node.textContent || "").join(" ").trim();
+        if (addedText) {
+          if (addedText !== lastMessage) pending.set(source, addedText);
+          lastMessage = addedText;
+        }
+      } else {
+        const currentText = source.textContent.trim();
+        if (currentText && currentText !== lastMessage) pending.set(source, currentText);
+        lastMessage = currentText;
+      }
+      lastMessages.set(source, lastMessage);
+    });
+    pending.forEach((message, source) => {
+      if (source.matches(".field-error, .form-notice")) showOperationErrorNotification(message);
+      else showErrorNotification(message);
+    });
+  });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+}
 
 function getActiveCurrency() {
   return CURRENCY_OPTIONS[state.currency] || CURRENCY_OPTIONS[DEFAULT_CURRENCY];
@@ -235,6 +330,8 @@ function saveSettings() {
 
 function renderCurrencyPicker() {
   const selected = CURRENCY_OPTIONS[state.currency] || CURRENCY_OPTIONS[DEFAULT_CURRENCY];
+  const selectedRate = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 4 }).format(selected.rate);
+  refs.currencyRateNote.textContent = `Курс приложения · 1 ${state.currency} = ${selectedRate} ₸`;
   refs.currencyCurrent.replaceChildren();
   const symbol = document.createElement("span");
   symbol.className = "currency-current-symbol";
@@ -245,7 +342,7 @@ function renderCurrencyPicker() {
   const name = document.createElement("strong");
   name.textContent = `${state.currency} · ${selected.label}`;
   const hint = document.createElement("small");
-  hint.textContent = "Текущая валюта";
+  hint.textContent = "Валюта отображения";
   details.append(name, hint);
   refs.currencyCurrent.append(symbol, details);
 
@@ -269,7 +366,10 @@ function renderCurrencyPicker() {
       choiceCode.textContent = code;
       const choiceName = document.createElement("small");
       choiceName.textContent = currency.label;
-      choiceDetails.append(choiceCode, choiceName);
+      const choiceRate = document.createElement("small");
+      choiceRate.className = "currency-choice-rate";
+      choiceRate.textContent = `1 ${code} = ${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 4 }).format(currency.rate)} ₸`;
+      choiceDetails.append(choiceCode, choiceName, choiceRate);
       button.append(choiceSymbol, choiceDetails);
       refs.currencyChoices.append(button);
     });
@@ -806,30 +906,6 @@ function renderCurrentAccount() {
       ? `${state.user.name} · ${formatPhoneInput(state.user.phone)}`
       : "";
   }
-  renderAvatar(refs.currentAvatar, state.user);
-  renderAvatar(refs.switcherAvatar, state.user);
-  renderAvatar(refs.brandAvatar, state.user);
-}
-
-function renderAvatar(element, user) {
-  if (!element) return;
-  const avatar = user?.avatar || "";
-  const firstLetter = Array.from(user?.name?.trim() || "")[0]?.toLocaleUpperCase("ru-RU") || "?";
-  element.textContent = avatar ? "" : firstLetter;
-  element.style.backgroundImage = avatar ? `url("${avatar}")` : "";
-  element.classList.toggle("has-avatar-image", Boolean(avatar));
-}
-
-function saveCurrentUserAvatar(dataUrl) {
-  if (!state.user) return;
-  const users = getUsers();
-  const userIndex = users.findIndex((user) => user.phone === state.user.phone);
-  if (userIndex < 0) return;
-  users[userIndex] = { ...users[userIndex], avatar: dataUrl };
-  saveUsers(users);
-  state.user = users[userIndex];
-  renderCurrentAccount();
-  renderSavedAccounts();
 }
 
 function getTodayISO() {
@@ -944,6 +1020,7 @@ function populateFilterCategoryOptions() {
 }
 
 function clearFormErrors() {
+  dismissOperationErrorNotification();
   document.querySelectorAll(".field-error").forEach((element) => {
     element.textContent = "";
   });
@@ -1002,7 +1079,8 @@ function validateDateField() {
   }
 
   if (errorNode) {
-    errorNode.textContent = "Укажите дату в формате ДД.ММ.ГГГГ";
+    const message = "Укажите дату в формате ДД.ММ.ГГГГ";
+    if (errorNode.textContent !== message) errorNode.textContent = message;
   }
   refs.dateInput.setAttribute("aria-invalid", "true");
   return false;
@@ -1308,7 +1386,7 @@ function validateSpendingLimitDraft() {
   } else if (dailyText && dailyAmount > amount) {
     message = "Дневной лимит не может быть больше общего лимита.";
   }
-  refs.spendingLimitError.textContent = message;
+  if (refs.spendingLimitError.textContent !== message) refs.spendingLimitError.textContent = message;
   refs.spendingLimitError.hidden = !message;
   return !message;
 }
@@ -1932,10 +2010,6 @@ function renderSavedAccounts() {
     button.type = "button";
     button.className = "saved-account-button";
     button.dataset.accountPhone = user.phone;
-    const avatar = document.createElement("span");
-    avatar.className = "saved-account-avatar";
-    avatar.setAttribute("aria-hidden", "true");
-    renderAvatar(avatar, user);
     const details = document.createElement("span");
     details.className = "saved-account-details";
     const name = document.createElement("strong");
@@ -1947,7 +2021,7 @@ function renderSavedAccounts() {
     arrow.className = "saved-account-arrow";
     arrow.setAttribute("aria-hidden", "true");
     arrow.textContent = "↗";
-    button.append(avatar, details, arrow);
+    button.append(details, arrow);
     refs.savedAccountsList.append(button);
   });
 }
@@ -2098,7 +2172,8 @@ function bindEvents() {
     if (!validateSpendingLimitDraft()) return;
     if (!Number.isFinite(amount) || amount <= 0) {
       refs.spendingLimitAmount.setCustomValidity("Введите сумму больше нуля.");
-      refs.spendingLimitAmount.reportValidity();
+      refs.spendingLimitError.textContent = "Введите сумму общего лимита больше нуля.";
+      refs.spendingLimitError.hidden = false;
       return;
     }
     refs.spendingLimitAmount.setCustomValidity("");
@@ -2217,6 +2292,7 @@ function bindEvents() {
   });
 
   refs.form.addEventListener("submit", handleSubmit);
+  refs.operationNotificationOk.addEventListener("click", dismissOperationErrorNotification);
 
   refs.typeFilter.addEventListener("change", () => {
     populateFilterCategoryOptions();
@@ -2276,30 +2352,6 @@ function bindEvents() {
     openAccountSwitcher();
   });
 
-  refs.avatarFileInput.addEventListener("change", () => {
-    const file = refs.avatarFileInput.files?.[0];
-    refs.avatarStatus.textContent = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      refs.avatarStatus.textContent = "Выберите файл изображения.";
-      refs.avatarFileInput.value = "";
-      return;
-    }
-    if (file.size > 1024 * 1024) {
-      refs.avatarStatus.textContent = "Размер изображения должен быть не больше 1 МБ.";
-      refs.avatarFileInput.value = "";
-      return;
-    }
-    const reader = new FileReader();
-    reader.addEventListener("load", () => {
-      if (typeof reader.result === "string") saveCurrentUserAvatar(reader.result);
-    });
-    reader.addEventListener("error", () => {
-      refs.avatarStatus.textContent = "Не удалось загрузить изображение. Попробуйте ещё раз.";
-    });
-    reader.readAsDataURL(file);
-  });
-
   refs.savedAccountsList.addEventListener("click", (event) => {
     const accountButton = event.target.closest("[data-account-phone]");
     if (!accountButton) return;
@@ -2355,6 +2407,7 @@ function init() {
 }
 
 function initAuthFlow() {
+  bindErrorNotifications();
   bindAuthEvents();
   try {
     const savedSession = localStorage.getItem(SESSION_KEY);
