@@ -2242,19 +2242,30 @@ function bindEvents() {
   });
 
   refs.clearOperationsBtn.addEventListener("click", () => {
-    if (!operations.length) {
+    if (!window.confirm("Удалить все аккаунты, операции, бюджеты и настройки Budget Monster на этом устройстве? Это действие нельзя отменить.")) {
       return;
     }
 
-    if (!window.confirm("Удалить все операции? Это действие нельзя отменить.")) {
-      return;
+    const accountDataKeys = [STORAGE_KEY, SETTINGS_KEY, BUDGETS_KEY];
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (accountDataKeys.some((baseKey) => key === baseKey || key.startsWith(`${baseKey}:`))) {
+        localStorage.removeItem(key);
+      }
     }
+    localStorage.removeItem(USERS_KEY);
+    localStorage.removeItem(SESSION_KEY);
 
     operations = [];
-    saveOperations();
-    refs.typeFilter.value = "all";
-    populateFilterCategoryOptions();
-    renderApp();
+    categoryBudgets = [];
+    selectedBudgetId = null;
+    state.currency = DEFAULT_CURRENCY;
+    state.theme = "dark";
+    state.layoutMode = "desktop";
+    state.spendingLimit = { amount: 0, dailyAmount: 0, period: "month", startDate: getTodayISO() };
+    applyTheme();
+    applyLayoutMode();
+    returnToAuthentication("register");
   });
 
   refs.logoutBtn.addEventListener("click", () => {
