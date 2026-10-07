@@ -1633,12 +1633,18 @@ function confirmDeleteOperation() {
 }
 
 function showSection(sectionName) {
+  const targetView = Array.from(refs.views).find((view) => view.id === `${sectionName}View`);
+  const targetButton = Array.from(refs.navButtons).find((button) => button.dataset.section === sectionName);
+
+  // Keep an invalid/stale navigation value from hiding every section.
+  if (!targetView || !targetButton) return;
+
   refs.views.forEach((view) => {
-    view.hidden = view.id !== `${sectionName}View`;
+    view.hidden = view !== targetView;
   });
 
   refs.navButtons.forEach((button) => {
-    const isActive = button.dataset.section === sectionName;
+    const isActive = button === targetButton;
     button.classList.toggle("is-active", isActive);
     if (isActive) {
       button.setAttribute("aria-current", "page");
@@ -1649,6 +1655,14 @@ function showSection(sectionName) {
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
+
+// Delegate section changes from the application shell so navigation keeps
+// working independently of the other form and dialog event bindings.
+refs.appShell.addEventListener("click", (event) => {
+  const button = event.target.closest(".mobile-nav-button[data-section]");
+  if (!button || !refs.appShell.contains(button)) return;
+  showSection(button.dataset.section);
+});
 
 function toggleForm(show) {
   if (show) {
@@ -2384,11 +2398,6 @@ function bindEvents() {
     }
   });
 
-  refs.navButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      showSection(button.dataset.section);
-    });
-  });
 }
 
 function init() {
